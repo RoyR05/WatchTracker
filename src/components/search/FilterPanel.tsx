@@ -9,6 +9,7 @@ export interface SearchFilters {
   ratingMin?: number;
   runtimeMin?: number;
   runtimeMax?: number;
+  language?: string;
 }
 
 interface FilterPanelProps {
@@ -21,6 +22,22 @@ interface Genre {
   id: number;
   name: string;
 }
+
+const LANGUAGES = [
+  { code: '', label: 'All Languages' },
+  { code: 'en', label: 'English' },
+  { code: 'es', label: 'Spanish' },
+  { code: 'fr', label: 'French' },
+  { code: 'de', label: 'German' },
+  { code: 'it', label: 'Italian' },
+  { code: 'ja', label: 'Japanese' },
+  { code: 'ko', label: 'Korean' },
+  { code: 'zh', label: 'Chinese' },
+  { code: 'pt', label: 'Portuguese' },
+  { code: 'ru', label: 'Russian' },
+  { code: 'hi', label: 'Hindi' },
+  { code: 'ar', label: 'Arabic' },
+];
 
 export function FilterPanel({ filters, onFiltersChange, onApply }: FilterPanelProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -65,12 +82,13 @@ export function FilterPanel({ filters, onFiltersChange, onApply }: FilterPanelPr
       yearTo: undefined,
       ratingMin: undefined,
       runtimeMin: undefined,
-      runtimeMax: undefined
+      runtimeMax: undefined,
+      language: undefined
     });
   }
 
   const hasActiveFilters = filters.genres.length > 0 || filters.yearFrom || filters.yearTo ||
-                           filters.ratingMin || filters.runtimeMin || filters.runtimeMax;
+                           filters.ratingMin || filters.runtimeMin || filters.runtimeMax || filters.language;
 
   return (
     <div className="mb-6">
@@ -139,6 +157,21 @@ export function FilterPanel({ filters, onFiltersChange, onApply }: FilterPanelPr
                 </button>
               ))}
             </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Language</label>
+            <select
+              value={filters.language || ''}
+              onChange={(e) => onFiltersChange({ ...filters, language: e.target.value || undefined })}
+              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+            >
+              {LANGUAGES.map(lang => (
+                <option key={lang.code} value={lang.code}>
+                  {lang.label}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -112,6 +112,9 @@ export default function SearchPage() {
     if (filters.runtimeMax) {
       params['with_runtime.lte'] = filters.runtimeMax.toString();
     }
+    if (filters.language) {
+      params['with_original_language'] = filters.language;
+    }
 
     return tmdbService.discover('movie', params);
   }
@@ -133,6 +136,9 @@ export default function SearchPage() {
     }
     if (filters.ratingMin) {
       params['vote_average.gte'] = filters.ratingMin.toString();
+    }
+    if (filters.language) {
+      params['with_original_language'] = filters.language;
     }
 
     return tmdbService.discover('tv', params);
