@@ -399,20 +399,4 @@ export const tmdbService = {
       };
     }
   },
-
-  getSimilarMovies: async (movieId: number, page = 1) => {
-    return tmdbFetch(`/movie/${movieId}/recommendations`, { page: page.toString() }, 0, CacheTTL.DISCOVERY);
-  },
-
-  getSimilarTVShows: async (tvId: number, page = 1) => {
-    return tmdbFetch(`/tv/${tvId}/recommendations`, { page: page.toString() }, 0, CacheTTL.DISCOVERY);
-  },
-
-  getMovieGenres: async () => {
-    return tmdbFetch('/genre/movie/list', {}, 0, CacheTTL.CREDITS);
-  },
-
-  getTVGenres: async () => {
-    return tmdbFetch('/genre/tv/list', {}, 0, CacheTTL.CREDITS);
-  },
 };

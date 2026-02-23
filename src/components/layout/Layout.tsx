@@ -1,19 +1,278 @@
-import React from 'react';
-import './Layout.css';
+import { ReactNode, useEffect, useState } from 'react';
+import { NavLink } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
+import { supabase } from '../../lib/supabase';
+import { ProfileSwitcher } from '../profile/ProfileSwitcher';
 
 interface LayoutProps {
-  children: React.ReactNode;
+  children: ReactNode;
 }
 
 export function Layout({ children }: LayoutProps) {
+  const { profile, user, signOut } = useAuth();
+  const [pendingCount, setPendingCount] = useState(0);
+
+  useEffect(() => {
+    if (user) {
+      loadPendingCount();
+
+      const channel = supabase
+        .channel('recommendations_changes')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'recommendations',
+            filter: `to_user_id=eq.${user.id}`
+          },
+          () => {
+            loadPendingCount();
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }
+  }, [user]);
+
+  async function loadPendingCount() {
+    if (!user) return;
+
+    try {
+      const { count, error } = await supabase
+        .from('recommendations')
+        .select('*', { count: 'exact', head: true })
+        .eq('to_user_id', user.id)
+        .eq('status', 'pending');
+
+      if (error) throw error;
+      setPendingCount(count || 0);
+    } catch (error) {
+      console.error('Error loading pending recommendations:', error);
+    }
+  }
+
   return (
-    <div className="layout">
-      <header className="layout-header">
-        <h1>TMDB Search</h1>
-      </header>
-      <main className="layout-main">
+    <div className="min-h-screen bg-gray-900">
+      <nav className="bg-gray-800 border-b border-gray-700 sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center space-x-8">
+              <h1 className="text-xl font-bold text-white">WatchTracker</h1>
+              <div className="hidden md:flex space-x-4">
+                <NavLink
+                  to="/"
+                  className={({ isActive }) =>
+                    `px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                      isActive
+                        ? 'bg-gray-900 text-white'
+                        : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                    }`
+                  }
+                >
+                  Dashboard
+                </NavLink>
+                <NavLink
+                  to="/search"
+                  className={({ isActive }) =>
+                    `px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                      isActive
+                        ? 'bg-gray-900 text-white'
+                        : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                    }`
+                  }
+                >
+                  Search
+                </NavLink>
+                <NavLink
+                  to="/lists"
+                  className={({ isActive }) =>
+                    `px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                      isActive
+                        ? 'bg-gray-900 text-white'
+                        : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                    }`
+                  }
+                >
+                  My Lists
+                </NavLink>
+                <NavLink
+                  to="/calendar"
+                  className={({ isActive }) =>
+                    `px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                      isActive
+                        ? 'bg-gray-900 text-white'
+                        : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                    }`
+                  }
+                >
+                  Calendar
+                </NavLink>
+                <NavLink
+                  to="/social"
+                  className={({ isActive }) =>
+                    `px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                      isActive
+                        ? 'bg-gray-900 text-white'
+                        : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                    }`
+                  }
+                >
+                  Social
+                </NavLink>
+                <NavLink
+                  to="/recommendations"
+                  className={({ isActive }) =>
+                    `px-3 py-2 rounded-md text-sm font-medium transition-colors relative ${
+                      isActive
+                        ? 'bg-gray-900 text-white'
+                        : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                    }`
+                  }
+                >
+                  Recommendations
+                  {pendingCount > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                      {pendingCount}
+                    </span>
+                  )}
+                </NavLink>
+              </div>
+            </div>
+            <div className="flex items-center space-x-4">
+              <ProfileSwitcher />
+              <NavLink
+                to="/profile"
+                className="flex items-center space-x-2 text-gray-300 hover:text-white transition-colors"
+              >
+                <div className="h-8 w-8 rounded-full bg-primary-600 flex items-center justify-center">
+                  <span className="text-sm font-medium text-white">
+                    {profile?.username?.charAt(0).toUpperCase() || 'U'}
+                  </span>
+                </div>
+                <span className="hidden sm:block text-sm">{profile?.username}</span>
+              </NavLink>
+              <button
+                onClick={signOut}
+                className="px-3 py-2 text-sm font-medium text-gray-300 hover:text-white transition-colors"
+              >
+                Sign Out
+              </button>
+            </div>
+          </div>
+        </div>
+      </nav>
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-24 md:pb-8">
         {children}
       </main>
+
+      <footer className="bg-gray-800 border-t border-gray-700 py-6 mb-16 md:mb-0">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col items-center justify-center space-y-3">
+            <div className="flex items-center space-x-3">
+              <div className="bg-blue-500 rounded px-3 py-1.5 font-bold text-white text-sm">
+                TMDb
+              </div>
+              <span className="text-gray-400 text-xs">Powered by The Movie Database</span>
+            </div>
+            <p className="text-gray-500 text-xs text-center max-w-2xl">
+              This product uses the TMDB API but is not endorsed or certified by TMDB.
+            </p>
+          </div>
+        </div>
+      </footer>
+
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700">
+        <div className="flex justify-around">
+          <NavLink
+            to="/"
+            className={({ isActive }) =>
+              `flex-1 flex flex-col items-center justify-center py-3 ${
+                isActive ? 'text-primary-500' : 'text-gray-400'
+              }`
+            }
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+            </svg>
+            <span className="text-xs mt-1">Home</span>
+          </NavLink>
+          <NavLink
+            to="/search"
+            className={({ isActive }) =>
+              `flex-1 flex flex-col items-center justify-center py-3 ${
+                isActive ? 'text-primary-500' : 'text-gray-400'
+              }`
+            }
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <span className="text-xs mt-1">Search</span>
+          </NavLink>
+          <NavLink
+            to="/lists"
+            className={({ isActive }) =>
+              `flex-1 flex flex-col items-center justify-center py-3 ${
+                isActive ? 'text-primary-500' : 'text-gray-400'
+              }`
+            }
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+            </svg>
+            <span className="text-xs mt-1">Lists</span>
+          </NavLink>
+          <NavLink
+            to="/calendar"
+            className={({ isActive }) =>
+              `flex-1 flex flex-col items-center justify-center py-3 ${
+                isActive ? 'text-primary-500' : 'text-gray-400'
+              }`
+            }
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            <span className="text-xs mt-1">Calendar</span>
+          </NavLink>
+          <NavLink
+            to="/social"
+            className={({ isActive }) =>
+              `flex-1 flex flex-col items-center justify-center py-3 ${
+                isActive ? 'text-primary-500' : 'text-gray-400'
+              }`
+            }
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
+            <span className="text-xs mt-1">Social</span>
+          </NavLink>
+          <NavLink
+            to="/recommendations"
+            className={({ isActive }) =>
+              `flex-1 flex flex-col items-center justify-center py-3 relative ${
+                isActive ? 'text-primary-500' : 'text-gray-400'
+              }`
+            }
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+            </svg>
+            {pendingCount > 0 && (
+              <span className="absolute top-1 right-1/4 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
+                {pendingCount > 9 ? '9+' : pendingCount}
+              </span>
+            )}
+            <span className="text-xs mt-1">Recs</span>
+          </NavLink>
+        </div>
+      </nav>
     </div>
   );
 }

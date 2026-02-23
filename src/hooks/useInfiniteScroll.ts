@@ -1,32 +1,51 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 
 interface UseInfiniteScrollOptions {
+  hasMore: boolean;
+  isLoading: boolean;
   onLoadMore: () => void;
   threshold?: number;
-  enabled?: boolean;
+  rootMargin?: string;
 }
 
-export function useInfiniteScroll({ onLoadMore, threshold = 0.1, enabled = true }: UseInfiniteScrollOptions) {
+export function useInfiniteScroll({
+  hasMore,
+  isLoading,
+  onLoadMore,
+  threshold = 0.5,
+  rootMargin = '100px',
+}: UseInfiniteScrollOptions) {
   const observerTarget = useRef<HTMLDivElement>(null);
 
+  const handleObserver = useCallback(
+    (entries: IntersectionObserverEntry[]) => {
+      const [entry] = entries;
+      if (entry.isIntersecting && hasMore && !isLoading) {
+        onLoadMore();
+      }
+    },
+    [hasMore, isLoading, onLoadMore]
+  );
+
   useEffect(() => {
-    if (!enabled || !observerTarget.current) return;
+    const element = observerTarget.current;
+    if (!element) return;
 
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          onLoadMore();
-        }
-      },
-      { threshold }
-    );
+    const options = {
+      root: null,
+      rootMargin,
+      threshold,
+    };
 
-    observer.observe(observerTarget.current);
+    const observer = new IntersectionObserver(handleObserver, options);
+    observer.observe(element);
 
     return () => {
-      observer.disconnect();
+      if (element) {
+        observer.unobserve(element);
+      }
     };
-  }, [onLoadMore, threshold, enabled]);
+  }, [handleObserver, threshold, rootMargin]);
 
-  return observerTarget;
+  return { observerTarget };
 }

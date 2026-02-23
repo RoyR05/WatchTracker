@@ -2,8 +2,6 @@ import { useState } from 'react';
 import { Layout } from '../components/layout/Layout';
 import { MediaCard } from '../components/media/MediaCard';
 import { SkeletonGrid } from '../components/ui/Skeleton';
-import { FilterPanel, type SearchFilters } from '../components/search/FilterPanel';
-import { SortDropdown, type SortOption } from '../components/search/SortDropdown';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { useToast } from '../contexts/ToastContext';
 import { tmdbService } from '../services/tmdb';
@@ -17,12 +15,6 @@ export default function SearchPage() {
   const [searched, setSearched] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
-  const [searchMode, setSearchMode] = useState<'query' | 'discover'>('query');
-  const [filters, setFilters] = useState<SearchFilters>({
-    mediaType: 'all',
-    genres: [],
-  });
-  const [sortBy, setSortBy] = useState<SortOption>('popularity.desc');
   const toast = useToast();
 
   async function handleSearch(e: React.FormEvent) {
@@ -31,7 +23,6 @@ export default function SearchPage() {
 
     setLoading(true);
     setSearched(true);
-    setSearchMode('query');
     setCurrentPage(1);
     try {
       const data = await tmdbService.searchMulti(query, 1);
@@ -48,133 +39,15 @@ export default function SearchPage() {
     }
   }
 
-  async function handleDiscoverSearch() {
-    setLoading(true);
-    setSearched(true);
-    setSearchMode('discover');
-    setCurrentPage(1);
-    setQuery('');
-
-    try {
-      if (filters.mediaType === 'all') {
-        const [movieData, tvData] = await Promise.all([
-          discoverMovies(1),
-          discoverTV(1)
-        ]);
-
-        const combined = [
-          ...(movieData.results || []),
-          ...(tvData.results || [])
-        ];
-        setResults(combined);
-        setTotalPages(Math.max(movieData.total_pages || 1, tvData.total_pages || 1));
-      } else if (filters.mediaType === 'movie') {
-        const data = await discoverMovies(1);
-        setResults(data.results || []);
-        setTotalPages(data.total_pages || 1);
-      } else {
-        const data = await discoverTV(1);
-        setResults(data.results || []);
-        setTotalPages(data.total_pages || 1);
-      }
-
-      if (results.length === 0) {
-        toast.info('No results found. Try adjusting your filters.');
-      }
-    } catch (error) {
-      toast.error('Failed to discover content');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function discoverMovies(page: number) {
-    const params: Record<string, string> = {
-      page: page.toString(),
-      sort_by: sortBy
-    };
-
-    if (filters.genres.length > 0) {
-      params.with_genres = filters.genres.join(',');
-    }
-    if (filters.yearFrom) {
-      params['release_date.gte'] = `${filters.yearFrom}-01-01`;
-    }
-    if (filters.yearTo) {
-      params['release_date.lte'] = `${filters.yearTo}-12-31`;
-    }
-    if (filters.ratingMin) {
-      params['vote_average.gte'] = filters.ratingMin.toString();
-    }
-    if (filters.runtimeMin) {
-      params['with_runtime.gte'] = filters.runtimeMin.toString();
-    }
-    if (filters.runtimeMax) {
-      params['with_runtime.lte'] = filters.runtimeMax.toString();
-    }
-    if (filters.language) {
-      params['with_original_language'] = filters.language;
-    }
-
-    return tmdbService.discover('movie', params);
-  }
-
-  async function discoverTV(page: number) {
-    const params: Record<string, string> = {
-      page: page.toString(),
-      sort_by: sortBy
-    };
-
-    if (filters.genres.length > 0) {
-      params.with_genres = filters.genres.join(',');
-    }
-    if (filters.yearFrom) {
-      params['first_air_date.gte'] = `${filters.yearFrom}-01-01`;
-    }
-    if (filters.yearTo) {
-      params['first_air_date.lte'] = `${filters.yearTo}-12-31`;
-    }
-    if (filters.ratingMin) {
-      params['vote_average.gte'] = filters.ratingMin.toString();
-    }
-    if (filters.language) {
-      params['with_original_language'] = filters.language;
-    }
-
-    return tmdbService.discover('tv', params);
-  }
-
   async function loadMore() {
     if (loadingMore || currentPage >= totalPages) return;
 
     setLoadingMore(true);
     try {
       const nextPage = currentPage + 1;
-
-      if (searchMode === 'query') {
-        const data = await tmdbService.searchMulti(query, nextPage);
-        const filteredResults = data.results.filter((item: any) => item.media_type === 'movie' || item.media_type === 'tv');
-        setResults(prev => [...prev, ...filteredResults]);
-      } else {
-        if (filters.mediaType === 'all') {
-          const [movieData, tvData] = await Promise.all([
-            discoverMovies(nextPage),
-            discoverTV(nextPage)
-          ]);
-          const combined = [
-            ...(movieData.results || []),
-            ...(tvData.results || [])
-          ];
-          setResults(prev => [...prev, ...combined]);
-        } else if (filters.mediaType === 'movie') {
-          const data = await discoverMovies(nextPage);
-          setResults(prev => [...prev, ...(data.results || [])]);
-        } else {
-          const data = await discoverTV(nextPage);
-          setResults(prev => [...prev, ...(data.results || [])]);
-        }
-      }
-
+      const data = await tmdbService.searchMulti(query, nextPage);
+      const filteredResults = data.results.filter((item: any) => item.media_type === 'movie' || item.media_type === 'tv');
+      setResults(prev => [...prev, ...filteredResults]);
       setCurrentPage(nextPage);
     } catch (error) {
       toast.error('Failed to load more results');
@@ -183,8 +56,9 @@ export default function SearchPage() {
     }
   }
 
-  const observerTarget = useInfiniteScroll({
-    enabled: currentPage < totalPages && !loadingMore,
+  const { observerTarget } = useInfiniteScroll({
+    hasMore: currentPage < totalPages,
+    isLoading: loadingMore,
     onLoadMore: loadMore,
   });
 
@@ -193,7 +67,7 @@ export default function SearchPage() {
       <div className="max-w-7xl mx-auto">
         <h1 className="text-3xl font-bold text-white mb-6">Search Movies & TV Shows</h1>
 
-        <form onSubmit={handleSearch} className="mb-4">
+        <form onSubmit={handleSearch} className="mb-8">
           <div className="relative">
             <input
               type="text"
@@ -224,49 +98,26 @@ export default function SearchPage() {
           </div>
         </form>
 
-        <FilterPanel
-          filters={filters}
-          onFiltersChange={setFilters}
-          onApply={handleDiscoverSearch}
-        />
-
-        {searched && (
-          <div className="flex items-center justify-between mb-4">
-            <p className="text-gray-400">
-              {results.length} results found
-              {currentPage < totalPages && ` (Page ${currentPage} of ${totalPages})`}
-            </p>
-            <SortDropdown value={sortBy} onChange={(newSort) => {
-              setSortBy(newSort);
-              if (searchMode === 'discover') {
-                handleDiscoverSearch();
-              }
-            }} />
-          </div>
-        )}
-
-        {loading && <SkeletonGrid />}
+        {loading && <SkeletonGrid count={20} />}
 
         {!loading && results.length > 0 && (
           <div>
+            <p className="text-gray-400 mb-4">
+              {results.length} results found
+              {currentPage < totalPages && ` (Page ${currentPage} of ${totalPages})`}
+            </p>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-              {results.map((item, index) => {
-                const mediaType = 'title' in item ? 'movie' : 'tv';
-                return (
-                  <MediaCard
-                    key={`${item.id}-${index}`}
-                    id={item.id}
-                    title={'title' in item ? item.title : item.name}
-                    posterPath={item.poster_path}
-                    mediaType={mediaType}
-                    rating={item.vote_average}
-                  />
-                );
-              })}
+              {results.map((item, index) => (
+                <MediaCard
+                  key={`${item.id}-${index}`}
+                  item={item}
+                  mediaType={'title' in item ? 'movie' : 'tv'}
+                />
+              ))}
             </div>
             {currentPage < totalPages && (
               <div ref={observerTarget} className="mt-8">
-                {loadingMore && <SkeletonGrid />}
+                {loadingMore && <SkeletonGrid count={12} />}
               </div>
             )}
           </div>
@@ -287,8 +138,7 @@ export default function SearchPage() {
                 d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
               />
             </svg>
-            <p className="text-gray-400 mb-2">Start searching for your favorite movies and TV shows</p>
-            <p className="text-gray-500 text-sm">Or use the advanced filters to discover new content</p>
+            <p className="text-gray-400">Start searching for your favorite movies and TV shows</p>
           </div>
         )}
       </div>
