@@ -49,7 +49,7 @@ export default function CalendarPage() {
   const [upcomingMovies, setUpcomingMovies] = useState<UpcomingMovie[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const [viewMode, setViewMode] = useState<ViewMode>('calendar');
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
   useEffect(() => {
