@@ -183,9 +183,8 @@ export default function SearchPage() {
     }
   }
 
-  const { observerTarget } = useInfiniteScroll({
-    hasMore: currentPage < totalPages,
-    isLoading: loadingMore,
+  const observerTarget = useInfiniteScroll({
+    enabled: currentPage < totalPages && !loadingMore,
     onLoadMore: loadMore,
   });
 
@@ -246,22 +245,28 @@ export default function SearchPage() {
           </div>
         )}
 
-        {loading && <SkeletonGrid count={20} />}
+        {loading && <SkeletonGrid />}
 
         {!loading && results.length > 0 && (
           <div>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-              {results.map((item, index) => (
-                <MediaCard
-                  key={`${item.id}-${index}`}
-                  item={item}
-                  mediaType={'title' in item ? 'movie' : 'tv'}
-                />
-              ))}
+              {results.map((item, index) => {
+                const mediaType = 'title' in item ? 'movie' : 'tv';
+                return (
+                  <MediaCard
+                    key={`${item.id}-${index}`}
+                    id={item.id}
+                    title={'title' in item ? item.title : item.name}
+                    posterPath={item.poster_path}
+                    mediaType={mediaType}
+                    rating={item.vote_average}
+                  />
+                );
+              })}
             </div>
             {currentPage < totalPages && (
               <div ref={observerTarget} className="mt-8">
-                {loadingMore && <SkeletonGrid count={12} />}
+                {loadingMore && <SkeletonGrid />}
               </div>
             )}
           </div>
