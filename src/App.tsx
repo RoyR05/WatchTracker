@@ -4,6 +4,7 @@ import { ProfileProvider } from './contexts/ProfileContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { ToastContainer } from './components/ui/ToastContainer';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
+import { AdminRoute } from './components/auth/AdminRoute';
 import AuthPage from './pages/AuthPage';
 import Dashboard from './pages/Dashboard';
 import SearchPage from './pages/SearchPage';
@@ -17,6 +18,13 @@ import RecommendationsPage from './pages/RecommendationsPage';
 import ManageProfilesPage from './pages/ManageProfilesPage';
 import { PersonPage } from './pages/PersonPage';
 import { ProfileSelector } from './components/profile/ProfileSelector';
+import { NotificationsPage } from './pages/NotificationsPage';
+import { AdminDashboard } from './pages/admin/AdminDashboard';
+import { UsersPage } from './pages/admin/UsersPage';
+import { PermissionsPage } from './pages/admin/PermissionsPage';
+import { SharesPage } from './pages/admin/SharesPage';
+import { NotificationsPage as AdminNotificationsPage } from './pages/admin/NotificationsPage';
+import { AuditLogPage } from './pages/admin/AuditLogPage';
 
 function App() {
   return (
@@ -121,6 +129,62 @@ function App() {
               <ProtectedRoute>
                 <RecommendationsPage />
               </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/notifications"
+            element={
+              <ProtectedRoute>
+                <NotificationsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin"
+            element={
+              <AdminRoute>
+                <AdminDashboard />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/users"
+            element={
+              <AdminRoute>
+                <UsersPage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/permissions"
+            element={
+              <AdminRoute>
+                <PermissionsPage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/shares"
+            element={
+              <AdminRoute>
+                <SharesPage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/notifications"
+            element={
+              <AdminRoute>
+                <AdminNotificationsPage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/audit-log"
+            element={
+              <AdminRoute>
+                <AuditLogPage />
+              </AdminRoute>
             }
           />
           <Route path="*" element={<Navigate to="/" replace />} />

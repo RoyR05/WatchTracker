@@ -1,6 +1,7 @@
 import { ReactNode, useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { useAdmin } from '../../hooks/useAdmin';
 import { supabase } from '../../lib/supabase';
 import { ProfileSwitcher } from '../profile/ProfileSwitcher';
 
@@ -10,13 +11,16 @@ interface LayoutProps {
 
 export function Layout({ children }: LayoutProps) {
   const { profile, user, signOut } = useAuth();
+  const { isAdmin } = useAdmin();
   const [pendingCount, setPendingCount] = useState(0);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
 
   useEffect(() => {
     if (user) {
       loadPendingCount();
+      loadUnreadNotifications();
 
-      const channel = supabase
+      const recsChannel = supabase
         .channel('recommendations_changes')
         .on(
           'postgres_changes',
@@ -32,8 +36,25 @@ export function Layout({ children }: LayoutProps) {
         )
         .subscribe();
 
+      const notifsChannel = supabase
+        .channel('notifications_changes')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'notifications',
+            filter: `user_id=eq.${user.id}`
+          },
+          () => {
+            loadUnreadNotifications();
+          }
+        )
+        .subscribe();
+
       return () => {
-        supabase.removeChannel(channel);
+        supabase.removeChannel(recsChannel);
+        supabase.removeChannel(notifsChannel);
       };
     }
   }, [user]);
@@ -52,6 +73,23 @@ export function Layout({ children }: LayoutProps) {
       setPendingCount(count || 0);
     } catch (error) {
       console.error('Error loading pending recommendations:', error);
+    }
+  }
+
+  async function loadUnreadNotifications() {
+    if (!user) return;
+
+    try {
+      const { count, error } = await supabase
+        .from('notifications')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('is_read', false);
+
+      if (error) throw error;
+      setUnreadNotifications(count || 0);
+    } catch (error) {
+      console.error('Error loading unread notifications:', error);
     }
   }
 
@@ -144,6 +182,27 @@ export function Layout({ children }: LayoutProps) {
             </div>
             <div className="flex items-center space-x-4">
               <ProfileSwitcher />
+              <NavLink
+                to="/notifications"
+                className="relative text-gray-300 hover:text-white transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                </svg>
+                {unreadNotifications > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                    {unreadNotifications}
+                  </span>
+                )}
+              </NavLink>
+              {isAdmin && (
+                <NavLink
+                  to="/admin"
+                  className="px-3 py-1.5 bg-orange-600 text-white text-sm font-medium rounded-md hover:bg-orange-700 transition-colors"
+                >
+                  Admin
+                </NavLink>
+              )}
               <NavLink
                 to="/profile"
                 className="flex items-center space-x-2 text-gray-300 hover:text-white transition-colors"
