@@ -183,9 +183,9 @@ export default function SearchPage() {
     }
   }
 
-  const observerTarget = useInfiniteScroll({
+  const { observerTarget } = useInfiniteScroll({
     hasMore: currentPage < totalPages,
-    loading: loadingMore,
+    isLoading: loadingMore,
     onLoadMore: loadMore,
   });
 
@@ -254,12 +254,8 @@ export default function SearchPage() {
               {results.map((item, index) => (
                 <MediaCard
                   key={`${item.id}-${index}`}
-                  id={item.id}
-                  title={'title' in item ? item.title : item.name}
-                  posterPath={item.poster_path}
+                  item={item}
                   mediaType={'title' in item ? 'movie' : 'tv'}
-                  releaseDate={'release_date' in item ? item.release_date : item.first_air_date}
-                  voteAverage={item.vote_average}
                 />
               ))}
             </div>

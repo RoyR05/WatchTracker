@@ -135,7 +135,7 @@ export interface PersonCredits {
 }
 
 async function tmdbFetch(endpoint: string, params: Record<string, string> = {}, retries = 0, cacheTTL?: number): Promise<any> {
-  const cacheKey = apiCache.generateKey(endpoint, JSON.stringify(params));
+  const cacheKey = apiCache.generateKey(endpoint, params);
 
   const cachedData = apiCache.get(cacheKey);
   if (cachedData) {
