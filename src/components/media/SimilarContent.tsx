@@ -59,12 +59,8 @@ export function SimilarContent({ mediaType, mediaId }: SimilarContentProps) {
         {similar.map((item) => (
           <MediaCard
             key={item.id}
-            id={item.id}
-            title={'title' in item ? item.title : item.name}
-            posterPath={item.poster_path}
+            item={item}
             mediaType={mediaType}
-            releaseDate={'release_date' in item ? item.release_date : item.first_air_date}
-            voteAverage={item.vote_average}
           />
         ))}
       </div>
