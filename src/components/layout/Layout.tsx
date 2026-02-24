@@ -234,9 +234,9 @@ export function Layout({ children }: LayoutProps) {
           <div className="flex flex-col items-center justify-center space-y-3">
             <div className="flex items-center space-x-3">
               <div className="bg-blue-500 rounded px-3 py-1.5 font-bold text-white text-sm">
-                TMDb
+                RaineyFlixs
               </div>
-              <span className="text-gray-400 text-xs">Powered by The Movie Database</span>
+              <span className="text-gray-400 text-xs">Your Personal Streaming Tracker</span>
             </div>
             <p className="text-gray-500 text-xs text-center max-w-2xl">
               This product uses the TMDB API but is not endorsed or certified by TMDB.
