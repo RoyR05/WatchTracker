@@ -149,7 +149,7 @@ export function Layout({ children }: LayoutProps) {
                 >
                   Calendar
                 </NavLink>
-                <NavLink
+                {/* <NavLink
                   to="/social"
                   className={({ isActive }) =>
                     `px-3 py-2 rounded-md text-sm font-medium transition-colors ${
@@ -160,7 +160,7 @@ export function Layout({ children }: LayoutProps) {
                   }
                 >
                   Social
-                </NavLink>
+                </NavLink> */}
                 <NavLink
                   to="/recommendations"
                   className={({ isActive }) =>
@@ -299,7 +299,7 @@ export function Layout({ children }: LayoutProps) {
             </svg>
             <span className="text-xs mt-1">Calendar</span>
           </NavLink>
-          <NavLink
+          {/* <NavLink
             to="/social"
             className={({ isActive }) =>
               `flex-1 flex flex-col items-center justify-center py-3 ${
@@ -311,7 +311,7 @@ export function Layout({ children }: LayoutProps) {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
             </svg>
             <span className="text-xs mt-1">Social</span>
-          </NavLink>
+          </NavLink> */}
           <NavLink
             to="/recommendations"
             className={({ isActive }) =>
