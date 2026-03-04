@@ -19,6 +19,7 @@ import ManageProfilesPage from './pages/ManageProfilesPage';
 import { PersonPage } from './pages/PersonPage';
 import { ProfileSelector } from './components/profile/ProfileSelector';
 import { NotificationsPage } from './pages/NotificationsPage';
+import DiscoveryPage from './pages/DiscoveryPage';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
 import { UsersPage } from './pages/admin/UsersPage';
 import { PermissionsPage } from './pages/admin/PermissionsPage';
@@ -56,6 +57,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/discovery"
+            element={
+              <ProtectedRoute>
+                <DiscoveryPage />
               </ProtectedRoute>
             }
           />

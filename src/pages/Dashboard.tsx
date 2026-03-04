@@ -3,8 +3,6 @@ import { Layout } from '../components/layout/Layout';
 import { MediaCard } from '../components/media/MediaCard';
 import { SkeletonGrid } from '../components/ui/Skeleton';
 import { GestureTutorial } from '../components/ui/GestureTutorial';
-import { FeelingLucky } from '../components/discovery/FeelingLucky';
-import { MoodDiscovery } from '../components/discovery/MoodDiscovery';
 import { MediaTypeSwitcher } from '../components/ui/MediaTypeSwitcher';
 import { CollapsibleSection } from '../components/ui/CollapsibleSection';
 import { useToast } from '../contexts/ToastContext';
@@ -478,12 +476,6 @@ export default function Dashboard() {
             </div>
           )}
         </CollapsibleSection>
-
-        <section className="flex justify-center">
-          <FeelingLucky />
-        </section>
-
-        <MoodDiscovery />
 
         <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
