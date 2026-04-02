@@ -31,7 +31,18 @@ export default function AuthPage() {
         navigate('/');
       }
     } catch (err: any) {
-      setError(err.message || 'An error occurred');
+      let errorMessage = err.message || 'An error occurred';
+
+      if (errorMessage.includes('Invalid login credentials')) {
+        errorMessage = 'Invalid email or password. Please check your credentials and try again.';
+      } else if (errorMessage.includes('User already registered')) {
+        errorMessage = 'This email is already registered. Please login instead or use a different email.';
+        setIsLogin(true);
+      } else if (errorMessage.includes('Email not confirmed')) {
+        errorMessage = 'Please check your email to confirm your account before logging in.';
+      }
+
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -129,6 +140,11 @@ export default function AuthPage() {
             {error && (
               <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-3">
                 <p className="text-red-400 text-sm">{error}</p>
+                {isLogin && error.includes('Invalid email or password') && (
+                  <p className="text-gray-400 text-xs mt-2">
+                    Tip: Make sure your password is at least 6 characters long and check for typos.
+                  </p>
+                )}
               </div>
             )}
 
