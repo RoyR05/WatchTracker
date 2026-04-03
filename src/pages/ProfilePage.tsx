@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Layout } from '../components/layout/Layout';
 import { useAuth } from '../contexts/AuthContext';
+import ChangePassword from '../components/profile/ChangePassword';
 
 export default function ProfilePage() {
   const { profile, updateProfile } = useAuth();
@@ -29,9 +30,11 @@ export default function ProfilePage() {
   return (
     <Layout>
       <div className="max-w-2xl mx-auto">
-        <h1 className="text-3xl font-bold text-white mb-6">Profile</h1>
+        <h1 className="text-3xl font-bold text-white mb-6">Profile Settings</h1>
 
+        <div className="space-y-6">
         <div className="bg-gray-800 rounded-lg p-6">
+          <h2 className="text-lg font-semibold text-white mb-6">Profile Information</h2>
           <div className="flex items-center space-x-4 mb-6">
             <div className="h-20 w-20 rounded-full bg-primary-600 flex items-center justify-center">
               <span className="text-3xl font-bold text-white">
@@ -39,7 +42,7 @@ export default function ProfilePage() {
               </span>
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-white">{profile?.username}</h2>
+              <h3 className="text-xl font-bold text-white">{profile?.username}</h3>
               <p className="text-gray-400">Member since {new Date(profile?.created_at || '').toLocaleDateString()}</p>
             </div>
           </div>
@@ -116,6 +119,9 @@ export default function ProfilePage() {
               </button>
             </div>
           )}
+        </div>
+
+        <ChangePassword />
         </div>
       </div>
     </Layout>
