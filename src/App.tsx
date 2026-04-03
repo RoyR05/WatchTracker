@@ -6,6 +6,7 @@ import { ToastContainer } from './components/ui/ToastContainer';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { AdminRoute } from './components/auth/AdminRoute';
 import AuthPage from './pages/AuthPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 import Dashboard from './pages/Dashboard';
 import SearchPage from './pages/SearchPage';
 import DetailPage from './pages/DetailPage';
@@ -36,6 +37,7 @@ function App() {
             <ToastContainer />
             <Routes>
           <Route path="/auth" element={<AuthPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route
             path="/profiles/select"
             element={
