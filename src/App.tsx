@@ -27,6 +27,9 @@ import { PermissionsPage } from './pages/admin/PermissionsPage';
 import { SharesPage } from './pages/admin/SharesPage';
 import { NotificationsPage as AdminNotificationsPage } from './pages/admin/NotificationsPage';
 import { AuditLogPage } from './pages/admin/AuditLogPage';
+import PlexRequestsPage from './pages/PlexRequestsPage';
+import AdminPlexRequestsPage from './pages/admin/PlexRequestsPage';
+import PlexSettingsPage from './pages/admin/PlexSettingsPage';
 
 function App() {
   return (
@@ -151,6 +154,14 @@ function App() {
             }
           />
           <Route
+            path="/plex-requests"
+            element={
+              <ProtectedRoute>
+                <PlexRequestsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/admin"
             element={
               <AdminRoute>
@@ -195,6 +206,22 @@ function App() {
             element={
               <AdminRoute>
                 <AuditLogPage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/plex-requests"
+            element={
+              <AdminRoute>
+                <AdminPlexRequestsPage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/plex-settings"
+            element={
+              <AdminRoute>
+                <PlexSettingsPage />
               </AdminRoute>
             }
           />

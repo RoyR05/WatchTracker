@@ -17,6 +17,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     { path: '/admin/shares', label: 'Shares', icon: '🔗' },
     { path: '/admin/notifications', label: 'Notifications', icon: '🔔' },
     { path: '/admin/audit-log', label: 'Audit Log', icon: '📋' },
+    { path: '/admin/plex-requests', label: 'Plex Requests', icon: '🎬' },
   ];
 
   return (

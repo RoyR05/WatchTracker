@@ -12,6 +12,7 @@ import { AddToListModal } from '../lists/AddToListModal';
 import { RecommendModal } from '../recommendations/RecommendModal';
 import { trackInteraction } from '../../services/interactions';
 import { preferencesService } from '../../services/preferences';
+import { plexService } from '../../services/plex';
 import type { Movie, TVShow } from '../../services/tmdb';
 import type { Database } from '../../types/database.types';
 
@@ -247,6 +248,29 @@ export function MediaCard({ item, mediaType }: MediaCardProps) {
         </svg>
       ),
       onClick: () => setShowRecommendModal(true),
+    },
+    {
+      label: 'Check on Plex',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2" />
+        </svg>
+      ),
+      onClick: async () => {
+        try {
+          toast.info('Checking Plex...');
+          const yearStr = typeof year === 'number' ? String(year) : null;
+          const result = await plexService.checkAvailability(title, yearStr, mediaType);
+          if (result.available) {
+            const quality = result.match?.quality ? ` (${result.match.quality})` : '';
+            toast.success(`Available on Plex${quality}`);
+          } else {
+            toast.error('Not on Plex');
+          }
+        } catch {
+          toast.error('Failed to check Plex');
+        }
+      },
     },
   ];
 
