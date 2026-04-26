@@ -14,7 +14,7 @@ export default function PlexSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [loadingSections, setLoadingSections] = useState(false);
-  const [testResult, setTestResult] = useState<{ success: boolean; serverName?: string } | null>(null);
+  const [testResult, setTestResult] = useState<{ success: boolean; serverName?: string; connectionMethod?: string; error?: string } | null>(null);
 
   useEffect(() => {
     loadConfig();
@@ -36,23 +36,19 @@ export default function PlexSettingsPage() {
   }
 
   async function handleTest() {
-    if (!serverUrl.trim()) {
-      toast.error('Enter a Plex server URL first');
-      return;
-    }
-
     setTesting(true);
     setTestResult(null);
     try {
-      const result = await plexService.testConnection(serverUrl.trim());
+      const result = await plexService.testConnection(serverUrl.trim() || undefined);
       setTestResult(result);
       if (result.success) {
-        toast.success(`Connected to ${result.serverName}`);
+        const method = result.connectionMethod === 'cloud' ? 'via Plex Cloud' : 'directly';
+        toast.success(`Connected to ${result.serverName} ${method}`);
       } else {
-        toast.error('Connection failed');
+        toast.error(result.error || 'Connection failed');
       }
     } catch (error) {
-      setTestResult({ success: false });
+      setTestResult({ success: false, error: 'Connection test failed' });
       toast.error('Connection test failed');
     } finally {
       setTesting(false);
@@ -79,7 +75,7 @@ export default function PlexSettingsPage() {
     setSaving(true);
     try {
       await plexService.savePlexConfig({
-        plex_server_url: serverUrl.trim(),
+        plex_server_url: serverUrl.trim() || null,
         library_movie_section_id: movieSectionId || null,
         library_tv_section_id: tvSectionId || null,
       });
@@ -111,31 +107,33 @@ export default function PlexSettingsPage() {
         <h1 className="text-2xl font-bold text-white mb-6">Plex Server Settings</h1>
 
         <div className="space-y-6">
-          {/* Server URL */}
+          {/* Server Connection */}
           <div className="bg-gray-800/60 rounded-lg p-6 border border-gray-700/50">
             <h2 className="text-lg font-semibold text-white mb-4">Server Connection</h2>
 
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1.5">
-                  Plex Server URL
+                  Plex Server URL <span className="text-gray-500 font-normal">(optional)</span>
                 </label>
                 <input
                   type="url"
                   value={serverUrl}
                   onChange={e => setServerUrl(e.target.value)}
-                  placeholder="https://your-plex-server:32400"
+                  placeholder="Leave blank to auto-discover via Plex Cloud"
                   className="w-full px-4 py-2.5 rounded-lg bg-gray-700 border border-gray-600 text-white placeholder-gray-400 focus:outline-none focus:border-amber-500 transition-colors"
                 />
                 <p className="text-xs text-gray-400 mt-1.5">
-                  The full URL of your Plex Media Server including the port (usually 32400).
+                  {serverUrl.trim()
+                    ? 'Direct connection will be tried first. If unreachable, Plex Cloud relay will be used as fallback.'
+                    : 'Your server will be discovered automatically through Plex Cloud. No port forwarding required.'}
                 </p>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
                 <button
                   onClick={handleTest}
-                  disabled={testing || !serverUrl.trim()}
+                  disabled={testing}
                   className="flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-600/30 text-amber-200 hover:bg-amber-600/50 font-medium text-sm transition-colors disabled:opacity-50"
                 >
                   {testing ? (
@@ -150,7 +148,9 @@ export default function PlexSettingsPage() {
 
                 {testResult && (
                   <span className={`text-sm font-medium ${testResult.success ? 'text-green-400' : 'text-red-400'}`}>
-                    {testResult.success ? `Connected: ${testResult.serverName}` : 'Connection failed'}
+                    {testResult.success
+                      ? `Connected: ${testResult.serverName} (${testResult.connectionMethod === 'cloud' ? 'Plex Cloud' : 'Direct'})`
+                      : testResult.error || 'Connection failed'}
                   </span>
                 )}
               </div>
@@ -163,7 +163,7 @@ export default function PlexSettingsPage() {
               <h2 className="text-lg font-semibold text-white">Library Sections</h2>
               <button
                 onClick={handleLoadSections}
-                disabled={loadingSections || !serverUrl.trim()}
+                disabled={loadingSections}
                 className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600 text-sm transition-colors disabled:opacity-50"
               >
                 {loadingSections ? (

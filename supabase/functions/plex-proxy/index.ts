@@ -8,6 +8,8 @@ const corsHeaders = {
     "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+const PLEX_CLIENT_ID = "watchtracker-plex-proxy";
+
 function jsonResponse(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -21,6 +23,88 @@ function normalizeTitleForComparison(title: string): string {
     .replace(/[^a-z0-9\s]/g, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+interface PlexConnection {
+  uri: string;
+  local: boolean;
+  relay: boolean;
+  protocol: string;
+}
+
+interface PlexResource {
+  name: string;
+  provides: string;
+  connections: PlexConnection[];
+}
+
+async function discoverServerUri(plexToken: string): Promise<{ uri: string; name: string }> {
+  const res = await fetch(
+    "https://plex.tv/api/v2/resources?includeHttps=1&includeRelay=1",
+    {
+      headers: {
+        Accept: "application/json",
+        "X-Plex-Token": plexToken,
+        "X-Plex-Client-Identifier": PLEX_CLIENT_ID,
+      },
+    }
+  );
+
+  if (!res.ok) {
+    throw new Error(`Plex.tv returned status ${res.status} - check that your PLEX_TOKEN is valid`);
+  }
+
+  const resources: PlexResource[] = await res.json();
+  const servers = resources.filter((r) => r.provides.includes("server"));
+
+  if (servers.length === 0) {
+    throw new Error("No Plex servers found on this account");
+  }
+
+  const server = servers[0];
+  const connections = server.connections || [];
+
+  // Prefer: relay > remote https > remote http > local
+  const relay = connections.find((c) => c.relay);
+  const remoteHttps = connections.find((c) => !c.local && !c.relay && c.protocol === "https");
+  const remoteHttp = connections.find((c) => !c.local && !c.relay);
+  const local = connections.find((c) => c.local);
+
+  const best = relay || remoteHttps || remoteHttp || local;
+  if (!best) {
+    throw new Error("No reachable connections found for your Plex server");
+  }
+
+  return { uri: best.uri, name: server.name };
+}
+
+async function getServerUri(
+  plexToken: string,
+  config: { plex_server_url?: string | null } | null
+): Promise<{ uri: string; name: string; method: string }> {
+  // If a manual URL is configured, try it first
+  if (config?.plex_server_url) {
+    try {
+      const testRes = await fetch(
+        `${config.plex_server_url}/?X-Plex-Token=${plexToken}`,
+        { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(5000) }
+      );
+      if (testRes.ok) {
+        const data = await testRes.json();
+        return {
+          uri: config.plex_server_url,
+          name: data?.MediaContainer?.friendlyName || "Plex Media Server",
+          method: "direct",
+        };
+      }
+    } catch {
+      // Direct connection failed, fall through to discovery
+    }
+  }
+
+  // Auto-discover via plex.tv
+  const discovered = await discoverServerUri(plexToken);
+  return { ...discovered, method: "cloud" };
 }
 
 Deno.serve(async (req: Request) => {
@@ -60,41 +144,56 @@ Deno.serve(async (req: Request) => {
     }
 
     if (action === "test") {
-      const serverUrl =
-        url.searchParams.get("server_url") || config?.plex_server_url;
-      if (!serverUrl) {
-        return jsonResponse({ error: "No Plex server URL provided" }, 400);
+      const overrideUrl = url.searchParams.get("server_url");
+      const testConfig = overrideUrl
+        ? { plex_server_url: overrideUrl }
+        : config;
+
+      try {
+        const server = await getServerUri(plexToken, testConfig);
+        return jsonResponse({
+          success: true,
+          serverName: server.name,
+          connectionMethod: server.method,
+        });
+      } catch (err) {
+        return jsonResponse({
+          success: false,
+          error: err.message || "Could not connect to Plex server",
+        });
       }
+    }
 
-      const plexRes = await fetch(`${serverUrl}/?X-Plex-Token=${plexToken}`, {
-        headers: { Accept: "application/json" },
-      });
-
-      if (!plexRes.ok) {
-        return jsonResponse(
-          { success: false, error: `Plex returned status ${plexRes.status}` },
-          200
-        );
+    if (action === "discover") {
+      try {
+        const discovered = await discoverServerUri(plexToken);
+        return jsonResponse({
+          success: true,
+          serverName: discovered.name,
+          serverUri: discovered.uri,
+        });
+      } catch (err) {
+        return jsonResponse({
+          success: false,
+          error: err.message || "Discovery failed",
+        });
       }
-
-      const plexData = await plexRes.json();
-      return jsonResponse({
-        success: true,
-        serverName:
-          plexData?.MediaContainer?.friendlyName || "Plex Media Server",
-      });
     }
 
     if (action === "sections") {
-      if (!config?.plex_server_url) {
+      let serverUri: string;
+      try {
+        const server = await getServerUri(plexToken, config);
+        serverUri = server.uri;
+      } catch (err) {
         return jsonResponse(
-          { error: "Plex server URL not configured. Go to Admin > Plex Settings to set it up." },
+          { error: err.message || "Cannot reach Plex server. Check your settings." },
           400
         );
       }
 
       const plexRes = await fetch(
-        `${config.plex_server_url}/library/sections?X-Plex-Token=${plexToken}`,
+        `${serverUri}/library/sections?X-Plex-Token=${plexToken}`,
         { headers: { Accept: "application/json" } }
       );
 
@@ -118,10 +217,14 @@ Deno.serve(async (req: Request) => {
     }
 
     if (action === "search") {
-      if (!config?.plex_server_url) {
+      let serverUri: string;
+      try {
+        const server = await getServerUri(plexToken, config);
+        serverUri = server.uri;
+      } catch (err) {
         return jsonResponse(
-          { error: "Plex server URL not configured. Go to Admin > Plex Settings to set it up." },
-          400
+          { available: false, error: err.message || "Cannot reach Plex server" },
+          200
         );
       }
 
@@ -135,14 +238,14 @@ Deno.serve(async (req: Request) => {
 
       const sectionId =
         mediaType === "tv"
-          ? config.library_tv_section_id
-          : config.library_movie_section_id;
+          ? config?.library_tv_section_id
+          : config?.library_movie_section_id;
 
       let searchUrl: string;
       if (sectionId) {
-        searchUrl = `${config.plex_server_url}/library/sections/${sectionId}/all?X-Plex-Token=${plexToken}&title=${encodeURIComponent(title)}`;
+        searchUrl = `${serverUri}/library/sections/${sectionId}/all?X-Plex-Token=${plexToken}&title=${encodeURIComponent(title)}`;
       } else {
-        searchUrl = `${config.plex_server_url}/search?X-Plex-Token=${plexToken}&query=${encodeURIComponent(title)}`;
+        searchUrl = `${serverUri}/search?X-Plex-Token=${plexToken}&query=${encodeURIComponent(title)}`;
       }
 
       const plexRes = await fetch(searchUrl, {

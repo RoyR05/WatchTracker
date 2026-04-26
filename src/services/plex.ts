@@ -57,7 +57,7 @@ export const plexService = {
     return res.json();
   },
 
-  async testConnection(serverUrl?: string): Promise<{ success: boolean; serverName?: string; error?: string }> {
+  async testConnection(serverUrl?: string): Promise<{ success: boolean; serverName?: string; connectionMethod?: string; error?: string }> {
     const headers = await getAuthHeaders();
     const params = new URLSearchParams({ action: 'test' });
     if (serverUrl) params.set('server_url', serverUrl);
@@ -210,7 +210,7 @@ export const plexService = {
   },
 
   async savePlexConfig(config: {
-    plex_server_url: string;
+    plex_server_url: string | null;
     library_movie_section_id: string | null;
     library_tv_section_id: string | null;
   }) {
