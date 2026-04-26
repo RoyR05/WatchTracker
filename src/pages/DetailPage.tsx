@@ -286,10 +286,11 @@ export default function DetailPage() {
       setPlexAvailability(availability);
       setPlexRequest(existingRequest);
       setPlexStatus(availability.available ? 'available' : 'unavailable');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error checking Plex:', error);
+      const msg = error?.message || 'Failed to check Plex availability';
       setPlexStatus('error');
-      toast.error('Failed to check Plex availability');
+      toast.error(msg);
     }
   }
 

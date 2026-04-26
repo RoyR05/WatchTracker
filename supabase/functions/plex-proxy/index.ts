@@ -15,17 +15,6 @@ function jsonResponse(data: unknown, status = 200) {
   });
 }
 
-async function getPlexConfig(supabase: ReturnType<typeof createClient>) {
-  const { data, error } = await supabase
-    .from("plex_server_config")
-    .select("*")
-    .eq("id", 1)
-    .maybeSingle();
-
-  if (error) throw new Error("Failed to read Plex config: " + error.message);
-  return data;
-}
-
 function normalizeTitleForComparison(title: string): string {
   return title
     .toLowerCase()
@@ -43,30 +32,14 @@ Deno.serve(async (req: Request) => {
     const plexToken = Deno.env.get("PLEX_TOKEN");
     if (!plexToken) {
       return jsonResponse(
-        { error: "PLEX_TOKEN not configured as an edge function secret" },
+        { error: "PLEX_TOKEN not configured. Set it as an edge function secret in the Supabase dashboard." },
         500
       );
     }
 
-    const authHeader = req.headers.get("Authorization");
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-    // Verify the caller is authenticated
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-    const userClient = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: authHeader || "" } },
-    });
-    const {
-      data: { user },
-      error: authError,
-    } = await userClient.auth.getUser();
-
-    if (authError || !user) {
-      return jsonResponse({ error: "Unauthorized" }, 401);
-    }
 
     const url = new URL(req.url);
     const action = url.searchParams.get("action");
@@ -75,13 +48,22 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: "Missing action parameter" }, 400);
     }
 
-    const config = await getPlexConfig(supabase);
+    const { data: config, error: configError } = await supabase
+      .from("plex_server_config")
+      .select("*")
+      .eq("id", 1)
+      .maybeSingle();
+
+    if (configError) {
+      console.error("Config read error:", configError);
+      return jsonResponse({ error: "Failed to read Plex configuration" }, 500);
+    }
 
     if (action === "test") {
       const serverUrl =
         url.searchParams.get("server_url") || config?.plex_server_url;
       if (!serverUrl) {
-        return jsonResponse({ error: "No Plex server URL configured" }, 400);
+        return jsonResponse({ error: "No Plex server URL provided" }, 400);
       }
 
       const plexRes = await fetch(`${serverUrl}/?X-Plex-Token=${plexToken}`, {
@@ -90,7 +72,7 @@ Deno.serve(async (req: Request) => {
 
       if (!plexRes.ok) {
         return jsonResponse(
-          { success: false, error: `Plex returned ${plexRes.status}` },
+          { success: false, error: `Plex returned status ${plexRes.status}` },
           200
         );
       }
@@ -105,7 +87,10 @@ Deno.serve(async (req: Request) => {
 
     if (action === "sections") {
       if (!config?.plex_server_url) {
-        return jsonResponse({ error: "Plex server URL not configured" }, 400);
+        return jsonResponse(
+          { error: "Plex server URL not configured. Go to Admin > Plex Settings to set it up." },
+          400
+        );
       }
 
       const plexRes = await fetch(
@@ -115,7 +100,7 @@ Deno.serve(async (req: Request) => {
 
       if (!plexRes.ok) {
         return jsonResponse(
-          { error: `Plex returned ${plexRes.status}` },
+          { error: `Plex returned status ${plexRes.status}` },
           plexRes.status
         );
       }
@@ -134,7 +119,10 @@ Deno.serve(async (req: Request) => {
 
     if (action === "search") {
       if (!config?.plex_server_url) {
-        return jsonResponse({ error: "Plex server URL not configured" }, 400);
+        return jsonResponse(
+          { error: "Plex server URL not configured. Go to Admin > Plex Settings to set it up." },
+          400
+        );
       }
 
       const title = url.searchParams.get("title");
@@ -163,7 +151,7 @@ Deno.serve(async (req: Request) => {
 
       if (!plexRes.ok) {
         return jsonResponse(
-          { available: false, error: `Plex returned ${plexRes.status}` },
+          { available: false, error: `Plex returned status ${plexRes.status}` },
           200
         );
       }
