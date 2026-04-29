@@ -38,7 +38,21 @@ interface PlexResource {
   connections: PlexConnection[];
 }
 
-async function discoverServerUri(plexToken: string): Promise<{ uri: string; name: string }> {
+interface ServerInfo {
+  uri: string;
+  name: string;
+}
+
+function pickBestConnection(connections: PlexConnection[]): string | null {
+  const relay = connections.find((c) => c.relay);
+  const remoteHttps = connections.find((c) => !c.local && !c.relay && c.protocol === "https");
+  const remoteHttp = connections.find((c) => !c.local && !c.relay);
+  const local = connections.find((c) => c.local);
+  const best = relay || remoteHttps || remoteHttp || local;
+  return best?.uri || null;
+}
+
+async function discoverAllServers(plexToken: string): Promise<ServerInfo[]> {
   const res = await fetch(
     "https://plex.tv/api/v2/resources?includeHttps=1&includeRelay=1",
     {
@@ -61,50 +75,36 @@ async function discoverServerUri(plexToken: string): Promise<{ uri: string; name
     throw new Error("No Plex servers found on this account");
   }
 
-  const server = servers[0];
-  const connections = server.connections || [];
-
-  // Prefer: relay > remote https > remote http > local
-  const relay = connections.find((c) => c.relay);
-  const remoteHttps = connections.find((c) => !c.local && !c.relay && c.protocol === "https");
-  const remoteHttp = connections.find((c) => !c.local && !c.relay);
-  const local = connections.find((c) => c.local);
-
-  const best = relay || remoteHttps || remoteHttp || local;
-  if (!best) {
-    throw new Error("No reachable connections found for your Plex server");
-  }
-
-  return { uri: best.uri, name: server.name };
-}
-
-async function getServerUri(
-  plexToken: string,
-  config: { plex_server_url?: string | null } | null
-): Promise<{ uri: string; name: string; method: string }> {
-  // If a manual URL is configured, try it first
-  if (config?.plex_server_url) {
-    try {
-      const testRes = await fetch(
-        `${config.plex_server_url}/?X-Plex-Token=${plexToken}`,
-        { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(5000) }
-      );
-      if (testRes.ok) {
-        const data = await testRes.json();
-        return {
-          uri: config.plex_server_url,
-          name: data?.MediaContainer?.friendlyName || "Plex Media Server",
-          method: "direct",
-        };
-      }
-    } catch {
-      // Direct connection failed, fall through to discovery
+  const results: ServerInfo[] = [];
+  for (const server of servers) {
+    const uri = pickBestConnection(server.connections || []);
+    if (uri) {
+      results.push({ uri, name: server.name });
     }
   }
 
-  // Auto-discover via plex.tv
-  const discovered = await discoverServerUri(plexToken);
-  return { ...discovered, method: "cloud" };
+  if (results.length === 0) {
+    throw new Error("No reachable connections found for any Plex server");
+  }
+
+  return results;
+}
+
+async function fetchFromServer(
+  serverUri: string,
+  path: string,
+  plexToken: string
+): Promise<Response | null> {
+  try {
+    const res = await fetch(
+      `${serverUri}${path}${path.includes("?") ? "&" : "?"}X-Plex-Token=${plexToken}`,
+      { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(10000) }
+    );
+    if (res.ok) return res;
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 Deno.serve(async (req: Request) => {
@@ -144,33 +144,29 @@ Deno.serve(async (req: Request) => {
     }
 
     if (action === "test") {
-      const overrideUrl = url.searchParams.get("server_url");
-      const testConfig = overrideUrl
-        ? { plex_server_url: overrideUrl }
-        : config;
-
       try {
-        const server = await getServerUri(plexToken, testConfig);
+        const servers = await discoverAllServers(plexToken);
+        const names = servers.map((s) => s.name);
         return jsonResponse({
           success: true,
-          serverName: server.name,
-          connectionMethod: server.method,
+          serverName: names.join(", "),
+          serverCount: servers.length,
+          connectionMethod: "cloud",
         });
       } catch (err) {
         return jsonResponse({
           success: false,
-          error: err.message || "Could not connect to Plex server",
+          error: err.message || "Could not connect to Plex",
         });
       }
     }
 
     if (action === "discover") {
       try {
-        const discovered = await discoverServerUri(plexToken);
+        const servers = await discoverAllServers(plexToken);
         return jsonResponse({
           success: true,
-          serverName: discovered.name,
-          serverUri: discovered.uri,
+          servers: servers.map((s) => ({ name: s.name, uri: s.uri })),
         });
       } catch (err) {
         return jsonResponse({
@@ -181,53 +177,36 @@ Deno.serve(async (req: Request) => {
     }
 
     if (action === "sections") {
-      let serverUri: string;
+      let servers: ServerInfo[];
       try {
-        const server = await getServerUri(plexToken, config);
-        serverUri = server.uri;
+        servers = await discoverAllServers(plexToken);
       } catch (err) {
         return jsonResponse(
-          { error: err.message || "Cannot reach Plex server. Check your settings." },
+          { error: err.message || "Cannot reach Plex servers." },
           400
         );
       }
 
-      const plexRes = await fetch(
-        `${serverUri}/library/sections?X-Plex-Token=${plexToken}`,
-        { headers: { Accept: "application/json" } }
-      );
+      const allSections: { id: string; title: string; type: string; server: string }[] = [];
 
-      if (!plexRes.ok) {
-        return jsonResponse(
-          { error: `Plex returned status ${plexRes.status}` },
-          plexRes.status
-        );
+      for (const server of servers) {
+        const res = await fetchFromServer(server.uri, "/library/sections", plexToken);
+        if (!res) continue;
+        const data = await res.json();
+        const dirs = data?.MediaContainer?.Directory || [];
+        for (const s of dirs) {
+          allSections.push({
+            id: `${server.name}::${s.key}`,
+            title: `${s.title} (${server.name})`,
+            type: s.type as string,
+          });
+        }
       }
 
-      const plexData = await plexRes.json();
-      const sections = (
-        plexData?.MediaContainer?.Directory || []
-      ).map((s: Record<string, unknown>) => ({
-        id: String(s.key),
-        title: s.title,
-        type: s.type,
-      }));
-
-      return jsonResponse({ sections });
+      return jsonResponse({ sections: allSections });
     }
 
     if (action === "search") {
-      let serverUri: string;
-      try {
-        const server = await getServerUri(plexToken, config);
-        serverUri = server.uri;
-      } catch (err) {
-        return jsonResponse(
-          { available: false, error: err.message || "Cannot reach Plex server" },
-          200
-        );
-      }
-
       const title = url.searchParams.get("title");
       const year = url.searchParams.get("year");
       const mediaType = url.searchParams.get("media_type");
@@ -236,75 +215,88 @@ Deno.serve(async (req: Request) => {
         return jsonResponse({ error: "Missing title parameter" }, 400);
       }
 
-      const sectionId =
-        mediaType === "tv"
-          ? config?.library_tv_section_id
-          : config?.library_movie_section_id;
-
-      let searchUrl: string;
-      if (sectionId) {
-        searchUrl = `${serverUri}/library/sections/${sectionId}/all?X-Plex-Token=${plexToken}&title=${encodeURIComponent(title)}`;
-      } else {
-        searchUrl = `${serverUri}/search?X-Plex-Token=${plexToken}&query=${encodeURIComponent(title)}`;
-      }
-
-      const plexRes = await fetch(searchUrl, {
-        headers: { Accept: "application/json" },
-      });
-
-      if (!plexRes.ok) {
+      let servers: ServerInfo[];
+      try {
+        servers = await discoverAllServers(plexToken);
+      } catch (err) {
         return jsonResponse(
-          { available: false, error: `Plex returned status ${plexRes.status}` },
+          { available: false, error: err.message || "Cannot reach Plex servers" },
           200
         );
       }
 
-      const plexData = await plexRes.json();
-      const results = plexData?.MediaContainer?.Metadata || [];
       const normalizedSearchTitle = normalizeTitleForComparison(title);
 
-      let bestMatch = null;
-      for (const item of results) {
-        const itemTitle = normalizeTitleForComparison(item.title || "");
-        const itemYear = item.year ? String(item.year) : null;
-        const itemType = item.type;
+      // Parse configured section IDs (format: "ServerName::sectionKey" or plain number)
+      const configuredSectionId =
+        mediaType === "tv"
+          ? config?.library_tv_section_id
+          : config?.library_movie_section_id;
 
-        if (mediaType === "tv" && itemType !== "show") continue;
-        if (mediaType === "movie" && itemType !== "movie") continue;
+      // Search across all servers
+      for (const server of servers) {
+        let searchPath: string;
 
-        const titleMatch =
-          itemTitle === normalizedSearchTitle ||
-          itemTitle.includes(normalizedSearchTitle) ||
-          normalizedSearchTitle.includes(itemTitle);
-
-        if (!titleMatch) continue;
-
-        const yearMatch = !year || !itemYear || itemYear === year;
-        if (titleMatch && yearMatch) {
-          let quality = null;
-          if (item.Media && item.Media.length > 0) {
-            const media = item.Media[0];
-            const height = media.videoResolution;
-            if (height) {
-              quality =
-                parseInt(height) >= 2160
-                  ? "4K"
-                  : parseInt(height) >= 1080
-                    ? "1080p"
-                    : parseInt(height) >= 720
-                      ? "720p"
-                      : `${height}p`;
-            }
+        if (configuredSectionId) {
+          // Check if this section belongs to this server
+          if (configuredSectionId.includes("::")) {
+            const [sName, sId] = configuredSectionId.split("::");
+            if (sName !== server.name) continue;
+            searchPath = `/library/sections/${sId}/all?title=${encodeURIComponent(title)}`;
+          } else {
+            searchPath = `/library/sections/${configuredSectionId}/all?title=${encodeURIComponent(title)}`;
           }
-          bestMatch = { title: item.title, year: item.year, quality };
-          break;
+        } else {
+          searchPath = `/search?query=${encodeURIComponent(title)}`;
+        }
+
+        const res = await fetchFromServer(server.uri, searchPath, plexToken);
+        if (!res) continue;
+
+        const plexData = await res.json();
+        const results = plexData?.MediaContainer?.Metadata || [];
+
+        for (const item of results) {
+          const itemTitle = normalizeTitleForComparison(item.title || "");
+          const itemYear = item.year ? String(item.year) : null;
+          const itemType = item.type;
+
+          if (mediaType === "tv" && itemType !== "show") continue;
+          if (mediaType === "movie" && itemType !== "movie") continue;
+
+          const titleMatch =
+            itemTitle === normalizedSearchTitle ||
+            itemTitle.includes(normalizedSearchTitle) ||
+            normalizedSearchTitle.includes(itemTitle);
+
+          if (!titleMatch) continue;
+
+          const yearMatch = !year || !itemYear || itemYear === year;
+          if (titleMatch && yearMatch) {
+            let quality = null;
+            if (item.Media && item.Media.length > 0) {
+              const media = item.Media[0];
+              const height = media.videoResolution;
+              if (height) {
+                quality =
+                  parseInt(height) >= 2160
+                    ? "4K"
+                    : parseInt(height) >= 1080
+                      ? "1080p"
+                      : parseInt(height) >= 720
+                        ? "720p"
+                        : `${height}p`;
+              }
+            }
+            return jsonResponse({
+              available: true,
+              match: { title: item.title, year: item.year, quality, server: server.name },
+            });
+          }
         }
       }
 
-      return jsonResponse({
-        available: !!bestMatch,
-        match: bestMatch,
-      });
+      return jsonResponse({ available: false, match: null });
     }
 
     return jsonResponse({ error: `Unknown action: ${action}` }, 400);
