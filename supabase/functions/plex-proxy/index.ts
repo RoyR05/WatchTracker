@@ -293,14 +293,22 @@ Deno.serve(async (req: Request) => {
         return jsonResponse({ available: false, serversSearched: 0, error: err.message }, 200);
       }
 
-      // Search all servers in parallel using global search (fast, no section detection needed)
+      // Search all servers in parallel using /hubs/search (the correct Plex search endpoint)
       const results = await Promise.allSettled(
         servers.map(async (server) => {
-          const path = `/search?query=${encodeURIComponent(title)}`;
-          const data = await plexFetch(server.uri, path, plexToken) as { MediaContainer?: { Metadata?: Array<Record<string, unknown>> } } | null;
+          const path = `/hubs/search?query=${encodeURIComponent(title)}&includeCollections=0&includeExternalMedia=0`;
+          const data = await plexFetch(server.uri, path, plexToken, 8000) as { MediaContainer?: { Hub?: Array<{ type: string; Metadata?: Array<Record<string, unknown>> }> } } | null;
           if (!data) return null;
-          const items = data?.MediaContainer?.Metadata || [];
-          return findBestMatch(items, title, year, mediaType, server.name);
+
+          // Extract items from all hubs
+          const hubs = data?.MediaContainer?.Hub || [];
+          const allItems: Array<Record<string, unknown>> = [];
+          for (const hub of hubs) {
+            if (hub.Metadata) {
+              allItems.push(...hub.Metadata);
+            }
+          }
+          return findBestMatch(allItems, title, year, mediaType, server.name);
         })
       );
 
