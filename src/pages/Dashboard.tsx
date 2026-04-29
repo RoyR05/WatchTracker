@@ -23,6 +23,7 @@ export default function Dashboard() {
   const [anticipated, setAnticipated] = useState<Array<Movie | TVShow>>([]);
   const [popular, setPopular] = useState<Array<Movie | TVShow>>([]);
   const [watchingMedia, setWatchingMedia] = useState<Array<{ media: MovieDetails | TVShowDetails; mediaType: 'movie' | 'tv' }>>([]);
+  const [planToWatchMedia, setPlanToWatchMedia] = useState<Array<{ media: MovieDetails | TVShowDetails; mediaType: 'movie' | 'tv' }>>([]);
   const [loading, setLoading] = useState(true);
   const [timeWindow, setTimeWindow] = useState<'day' | 'week'>('week');
   const [mediaType, setMediaType] = useState<'all' | 'movie' | 'tv'>('all');
@@ -151,11 +152,20 @@ export default function Dashboard() {
           .order('updated_at', { ascending: false })
           .limit(10);
 
-        const [trendingData, anticipatedData, popularData, watchlistData] = await Promise.all([
+        const planToWatchPromise = supabase
+          .from('watchlist_items')
+          .select('*')
+          .eq('profile_id', currentProfile.id)
+          .eq('status', 'plan_to_watch')
+          .order('updated_at', { ascending: false })
+          .limit(10);
+
+        const [trendingData, anticipatedData, popularData, watchlistData, planToWatchData] = await Promise.all([
           trendingPromise,
           anticipatedPromise,
           popularPromise,
-          watchlistPromise
+          watchlistPromise,
+          planToWatchPromise
         ]);
 
         if (trendingData && trendingData.results) {
@@ -191,6 +201,23 @@ export default function Dashboard() {
             })
           );
           setWatchingMedia(mediaDetails.filter((item): item is { media: MovieDetails | TVShowDetails; mediaType: 'movie' | 'tv' } => item !== null));
+        }
+
+        if (planToWatchData.data && planToWatchData.data.length > 0) {
+          const mediaDetails = await Promise.all(
+            planToWatchData.data.map(async (item) => {
+              try {
+                const details = item.media_type === 'movie'
+                  ? await tmdbService.getMovieDetails(item.tmdb_id)
+                  : await tmdbService.getTVShowDetails(item.tmdb_id);
+                return { media: details, mediaType: item.media_type };
+              } catch (error) {
+                console.error(`Error loading details for ${item.media_type} ${item.tmdb_id}:`, error);
+                return null;
+              }
+            })
+          );
+          setPlanToWatchMedia(mediaDetails.filter((item): item is { media: MovieDetails | TVShowDetails; mediaType: 'movie' | 'tv' } => item !== null));
         }
       } catch (error) {
         console.error('Error loading dashboard:', error);
@@ -473,6 +500,32 @@ export default function Dashboard() {
           ) : (
             <div className="bg-gray-800 rounded-lg p-8 text-center">
               <p className="text-gray-400">No items in your watchlist yet. Start adding some content!</p>
+            </div>
+          )}
+        </CollapsibleSection>
+
+        <CollapsibleSection
+          id="plan-to-watch"
+          title="Plan to Watch"
+          itemCount={planToWatchMedia.length}
+        >
+          {planToWatchMedia.length > 0 ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+              {planToWatchMedia.map((item) => (
+                <div key={item.media.id} className="relative">
+                  <div className="absolute top-2 right-2 z-10 bg-amber-600 text-white text-xs px-2 py-1 rounded">
+                    Plan to Watch
+                  </div>
+                  <MediaCard
+                    item={item.media}
+                    mediaType={item.mediaType}
+                  />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="bg-gray-800 rounded-lg p-8 text-center">
+              <p className="text-gray-400">No items in your plan to watch list. Swipe right on content to add it!</p>
             </div>
           )}
         </CollapsibleSection>
