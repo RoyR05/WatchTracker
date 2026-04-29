@@ -9,7 +9,7 @@ const corsHeaders = {
 };
 
 const PLEX_CLIENT_ID = "watchtracker-plex-proxy";
-const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const CACHE_TTL_MS = 10 * 60 * 1000;
 
 function jsonResponse(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -17,8 +17,6 @@ function jsonResponse(data: unknown, status = 200) {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 }
-
-// --- Title matching utilities ---
 
 function normalize(title: string): string {
   return title
@@ -38,17 +36,15 @@ function titleWords(title: string): string[] {
 }
 
 function titleSimilarity(searchTitle: string, resultTitle: string): number {
-  const searchWords = titleWords(searchTitle);
-  const resultWords = titleWords(resultTitle);
+  const normSearch = removeArticles(normalize(searchTitle));
+  const normResult = removeArticles(normalize(resultTitle));
 
+  if (normSearch === normResult) return 1.0;
+
+  const searchWords = normSearch.split(" ").filter(Boolean);
+  const resultWords = normResult.split(" ").filter(Boolean);
   if (searchWords.length === 0 || resultWords.length === 0) return 0;
 
-  // Exact normalized match
-  if (removeArticles(normalize(searchTitle)) === removeArticles(normalize(resultTitle))) {
-    return 1.0;
-  }
-
-  // Word overlap
   const searchSet = new Set(searchWords);
   const resultSet = new Set(resultWords);
   let matchCount = 0;
@@ -58,13 +54,9 @@ function titleSimilarity(searchTitle: string, resultTitle: string): number {
 
   const precision = matchCount / searchSet.size;
   const recall = matchCount / resultSet.size;
-
   if (precision === 0 && recall === 0) return 0;
-  // F1 score
   return (2 * precision * recall) / (precision + recall);
 }
-
-// --- Plex API helpers ---
 
 interface ServerInfo {
   uri: string;
@@ -102,12 +94,12 @@ async function discoverServers(plexToken: string): Promise<ServerInfo[]> {
         "X-Plex-Token": plexToken,
         "X-Plex-Client-Identifier": PLEX_CLIENT_ID,
       },
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(5000),
     }
   );
 
   if (!res.ok) {
-    throw new Error(`Plex.tv returned ${res.status} - verify PLEX_TOKEN is valid`);
+    throw new Error(`Plex.tv returned ${res.status}`);
   }
 
   const resources: PlexResource[] = await res.json();
@@ -120,17 +112,16 @@ async function discoverServers(plexToken: string): Promise<ServerInfo[]> {
   }
 
   if (results.length === 0) {
-    throw new Error("No reachable Plex servers found on this account");
+    throw new Error("No reachable Plex servers found");
   }
   return results;
 }
 
-async function getServers(
+async function getCachedServers(
   plexToken: string,
   supabase: ReturnType<typeof createClient>,
   config: Record<string, unknown> | null
 ): Promise<ServerInfo[]> {
-  // Check cache
   if (config?.discovered_servers && config?.discovered_at) {
     const cachedAt = new Date(config.discovered_at as string).getTime();
     if (Date.now() - cachedAt < CACHE_TTL_MS) {
@@ -138,17 +129,12 @@ async function getServers(
     }
   }
 
-  // Fresh discovery
   const servers = await discoverServers(plexToken);
 
-  // Update cache (fire and forget)
+  // Cache in background
   supabase
     .from("plex_server_config")
-    .upsert({
-      id: 1,
-      discovered_servers: servers,
-      discovered_at: new Date().toISOString(),
-    })
+    .upsert({ id: 1, discovered_servers: servers, discovered_at: new Date().toISOString() })
     .then(() => {});
 
   return servers;
@@ -158,7 +144,7 @@ async function plexFetch(
   serverUri: string,
   path: string,
   plexToken: string,
-  timeoutMs = 6000
+  timeoutMs = 5000
 ): Promise<unknown | null> {
   try {
     const separator = path.includes("?") ? "&" : "?";
@@ -173,42 +159,45 @@ async function plexFetch(
   }
 }
 
-async function autoDetectSections(
-  servers: ServerInfo[],
-  plexToken: string,
-  supabase: ReturnType<typeof createClient>
-): Promise<{ movieSections: { server: string; id: string }[]; tvSections: { server: string; id: string }[] }> {
-  const movieSections: { server: string; id: string }[] = [];
-  const tvSections: { server: string; id: string }[] = [];
+function findBestMatch(
+  items: Array<Record<string, unknown>>,
+  searchTitle: string,
+  year: string | null,
+  mediaType: string | null,
+  serverName: string
+): { title: string; year: number | null; quality: string | null; server: string; score: number } | null {
+  let best: { title: string; year: number | null; quality: string | null; server: string; score: number } | null = null;
 
-  const sectionPromises = servers.map(async (server) => {
-    const data = await plexFetch(server.uri, "/library/sections", plexToken) as { MediaContainer?: { Directory?: Array<{ key: string; type: string }> } } | null;
-    if (!data) return;
-    const dirs = data?.MediaContainer?.Directory || [];
-    for (const d of dirs) {
-      if (d.type === "movie") movieSections.push({ server: server.name, id: String(d.key) });
-      if (d.type === "show") tvSections.push({ server: server.name, id: String(d.key) });
+  for (const item of items) {
+    const itemTitle = (item.title as string) || "";
+    const itemYear = item.year ? String(item.year) : null;
+    const itemType = item.type as string;
+
+    if (mediaType === "tv" && itemType && itemType !== "show" && itemType !== "season" && itemType !== "episode") continue;
+    if (mediaType === "movie" && itemType && itemType !== "movie") continue;
+
+    const score = titleSimilarity(searchTitle, itemTitle);
+    if (score < 0.6) continue;
+
+    const yearMatch = !year || !itemYear || itemYear === year;
+    if (!yearMatch && score < 0.95) continue;
+
+    if (!best || score > best.score) {
+      let quality: string | null = null;
+      const media = (item.Media as Array<{ videoResolution?: string }>) || [];
+      if (media.length > 0 && media[0].videoResolution) {
+        const h = parseInt(media[0].videoResolution);
+        if (!isNaN(h)) {
+          quality = h >= 2160 ? "4K" : h >= 1080 ? "1080p" : h >= 720 ? "720p" : `${h}p`;
+        } else {
+          quality = media[0].videoResolution;
+        }
+      }
+      best = { title: itemTitle, year: item.year as number | null, quality, server: serverName, score };
     }
-  });
-
-  await Promise.allSettled(sectionPromises);
-
-  // Cache the first detected sections
-  if (movieSections.length > 0 || tvSections.length > 0) {
-    supabase
-      .from("plex_server_config")
-      .update({
-        auto_movie_section_id: movieSections.length > 0 ? JSON.stringify(movieSections) : null,
-        auto_tv_section_id: tvSections.length > 0 ? JSON.stringify(tvSections) : null,
-      })
-      .eq("id", 1)
-      .then(() => {});
   }
-
-  return { movieSections, tvSections };
+  return best;
 }
-
-// --- Main handler ---
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -218,10 +207,7 @@ Deno.serve(async (req: Request) => {
   try {
     const plexToken = Deno.env.get("PLEX_TOKEN");
     if (!plexToken) {
-      return jsonResponse(
-        { error: "PLEX_TOKEN not configured." },
-        500
-      );
+      return jsonResponse({ error: "PLEX_TOKEN not configured." }, 500);
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -230,7 +216,6 @@ Deno.serve(async (req: Request) => {
 
     const url = new URL(req.url);
     const action = url.searchParams.get("action");
-    const debug = url.searchParams.get("debug") === "1";
 
     if (!action) {
       return jsonResponse({ error: "Missing action parameter" }, 400);
@@ -242,10 +227,9 @@ Deno.serve(async (req: Request) => {
       .eq("id", 1)
       .maybeSingle();
 
-    // --- TEST ---
     if (action === "test") {
       try {
-        const servers = await getServers(plexToken, supabase, config);
+        const servers = await getCachedServers(plexToken, supabase, config);
         return jsonResponse({
           success: true,
           serverName: servers.map((s) => s.name).join(", "),
@@ -257,31 +241,25 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // --- DISCOVER ---
     if (action === "discover") {
       try {
         const servers = await discoverServers(plexToken);
-        return jsonResponse({
-          success: true,
-          servers: servers.map((s) => ({ name: s.name, uri: s.uri })),
-        });
+        return jsonResponse({ success: true, servers: servers.map((s) => ({ name: s.name, uri: s.uri })) });
       } catch (err) {
         return jsonResponse({ success: false, error: err.message });
       }
     }
 
-    // --- SECTIONS ---
     if (action === "sections") {
       let servers: ServerInfo[];
       try {
-        servers = await getServers(plexToken, supabase, config);
+        servers = await getCachedServers(plexToken, supabase, config);
       } catch (err) {
         return jsonResponse({ error: err.message }, 400);
       }
 
       const allSections: { id: string; title: string; type: string }[] = [];
-
-      const results = await Promise.allSettled(
+      await Promise.allSettled(
         servers.map(async (server) => {
           const data = await plexFetch(server.uri, "/library/sections", plexToken) as { MediaContainer?: { Directory?: Array<{ key: string; title: string; type: string }> } } | null;
           if (!data) return;
@@ -299,7 +277,6 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ sections: allSections });
     }
 
-    // --- SEARCH ---
     if (action === "search") {
       const title = url.searchParams.get("title");
       const year = url.searchParams.get("year");
@@ -311,169 +288,112 @@ Deno.serve(async (req: Request) => {
 
       let servers: ServerInfo[];
       try {
-        servers = await getServers(plexToken, supabase, config);
+        servers = await getCachedServers(plexToken, supabase, config);
       } catch (err) {
-        return jsonResponse({ available: false, error: err.message }, 200);
+        return jsonResponse({ available: false, serversSearched: 0, error: err.message }, 200);
       }
 
-      // Determine which sections to search
-      const configuredSection =
-        mediaType === "tv" ? config?.library_tv_section_id : config?.library_movie_section_id;
-
-      let sectionsToSearch: { serverUri: string; serverName: string; sectionId: string }[] = [];
-
-      if (configuredSection) {
-        // Manually configured
-        if (configuredSection.includes("::")) {
-          const [sName, sId] = configuredSection.split("::");
-          const server = servers.find((s) => s.name === sName);
-          if (server) sectionsToSearch.push({ serverUri: server.uri, serverName: server.name, sectionId: sId });
-        } else {
-          for (const s of servers) {
-            sectionsToSearch.push({ serverUri: s.uri, serverName: s.name, sectionId: configuredSection });
-          }
-        }
-      } else {
-        // Try auto-detected sections from cache
-        const cachedSections = mediaType === "tv" ? config?.auto_tv_section_id : config?.auto_movie_section_id;
-        if (cachedSections) {
-          try {
-            const parsed = JSON.parse(cachedSections as string) as { server: string; id: string }[];
-            for (const ps of parsed) {
-              const server = servers.find((s) => s.name === ps.server);
-              if (server) sectionsToSearch.push({ serverUri: server.uri, serverName: server.name, sectionId: ps.id });
-            }
-          } catch { /* fall through to auto-detect */ }
-        }
-
-        // If no cached sections, auto-detect now
-        if (sectionsToSearch.length === 0) {
-          const detected = await autoDetectSections(servers, plexToken, supabase);
-          const relevantSections = mediaType === "tv" ? detected.tvSections : detected.movieSections;
-          for (const ds of relevantSections) {
-            const server = servers.find((s) => s.name === ds.server);
-            if (server) sectionsToSearch.push({ serverUri: server.uri, serverName: server.name, sectionId: ds.id });
-          }
-        }
-      }
-
-      const debugInfo: string[] = [];
-
-      // If we have sections, search them in parallel
-      if (sectionsToSearch.length > 0) {
-        const searchResults = await Promise.allSettled(
-          sectionsToSearch.map(async (section) => {
-            const path = `/library/sections/${section.sectionId}/all?title=${encodeURIComponent(title)}`;
-            const data = await plexFetch(section.serverUri, path, plexToken) as { MediaContainer?: { Metadata?: Array<Record<string, unknown>> } } | null;
-            if (!data) return null;
-            const items = data?.MediaContainer?.Metadata || [];
-            if (debug) debugInfo.push(`${section.serverName} section ${section.sectionId}: ${items.length} results`);
-            return { items, serverName: section.serverName };
-          })
-        );
-
-        // Check all results for best match
-        let bestMatch: { title: string; year: number | null; quality: string | null; server: string; score: number } | null = null;
-
-        for (const result of searchResults) {
-          if (result.status !== "fulfilled" || !result.value) continue;
-          const { items, serverName } = result.value;
-
-          for (const item of items) {
-            const itemTitle = item.title as string || "";
-            const itemYear = item.year ? String(item.year) : null;
-
-            const score = titleSimilarity(title, itemTitle);
-            if (debug) debugInfo.push(`  "${itemTitle}" (${itemYear}) score=${score.toFixed(2)}`);
-
-            if (score < 0.6) continue;
-
-            const yearMatch = !year || !itemYear || itemYear === year;
-            if (!yearMatch && score < 0.95) continue;
-
-            if (!bestMatch || score > bestMatch.score) {
-              let quality: string | null = null;
-              const media = (item.Media as Array<{ videoResolution?: string }>) || [];
-              if (media.length > 0 && media[0].videoResolution) {
-                const h = parseInt(media[0].videoResolution);
-                if (!isNaN(h)) {
-                  quality = h >= 2160 ? "4K" : h >= 1080 ? "1080p" : h >= 720 ? "720p" : `${h}p`;
-                } else {
-                  quality = media[0].videoResolution;
-                }
-              }
-              bestMatch = { title: itemTitle, year: item.year as number | null, quality, server: serverName, score };
-            }
-          }
-        }
-
-        if (bestMatch) {
-          const response: Record<string, unknown> = {
-            available: true,
-            match: { title: bestMatch.title, year: bestMatch.year, quality: bestMatch.quality, server: bestMatch.server },
-          };
-          if (debug) response.debug = debugInfo;
-          return jsonResponse(response);
-        }
-      }
-
-      // Fallback: global search across all servers in parallel
-      const globalResults = await Promise.allSettled(
+      // Search all servers in parallel using global search (fast, no section detection needed)
+      const results = await Promise.allSettled(
         servers.map(async (server) => {
           const path = `/search?query=${encodeURIComponent(title)}`;
           const data = await plexFetch(server.uri, path, plexToken) as { MediaContainer?: { Metadata?: Array<Record<string, unknown>> } } | null;
           if (!data) return null;
           const items = data?.MediaContainer?.Metadata || [];
-          if (debug) debugInfo.push(`Global search ${server.name}: ${items.length} results`);
-          return { items, serverName: server.name };
+          return findBestMatch(items, title, year, mediaType, server.name);
         })
       );
 
-      let bestMatch: { title: string; year: number | null; quality: string | null; server: string; score: number } | null = null;
-
-      for (const result of globalResults) {
-        if (result.status !== "fulfilled" || !result.value) continue;
-        const { items, serverName } = result.value;
-
-        for (const item of items) {
-          const itemTitle = item.title as string || "";
-          const itemYear = item.year ? String(item.year) : null;
-          const itemType = item.type as string;
-
-          if (mediaType === "tv" && itemType !== "show") continue;
-          if (mediaType === "movie" && itemType !== "movie") continue;
-
-          const score = titleSimilarity(title, itemTitle);
-          if (debug) debugInfo.push(`  "${itemTitle}" (${itemYear}) type=${itemType} score=${score.toFixed(2)}`);
-
-          if (score < 0.6) continue;
-
-          const yearMatch = !year || !itemYear || itemYear === year;
-          if (!yearMatch && score < 0.95) continue;
-
-          if (!bestMatch || score > bestMatch.score) {
-            let quality: string | null = null;
-            const media = (item.Media as Array<{ videoResolution?: string }>) || [];
-            if (media.length > 0 && media[0].videoResolution) {
-              const h = parseInt(media[0].videoResolution);
-              if (!isNaN(h)) {
-                quality = h >= 2160 ? "4K" : h >= 1080 ? "1080p" : h >= 720 ? "720p" : `${h}p`;
-              } else {
-                quality = media[0].videoResolution;
-              }
-            }
-            bestMatch = { title: itemTitle, year: item.year as number | null, quality, server: serverName, score };
+      // Find best across all servers
+      let overallBest: { title: string; year: number | null; quality: string | null; server: string; score: number } | null = null;
+      for (const r of results) {
+        if (r.status === "fulfilled" && r.value) {
+          if (!overallBest || r.value.score > overallBest.score) {
+            overallBest = r.value;
           }
         }
       }
 
-      const response: Record<string, unknown> = {
-        available: !!bestMatch,
-        match: bestMatch ? { title: bestMatch.title, year: bestMatch.year, quality: bestMatch.quality, server: bestMatch.server } : null,
-        serversSearched: servers.length,
-      };
-      if (debug) response.debug = debugInfo;
-      return jsonResponse(response);
+      if (overallBest) {
+        return jsonResponse({
+          available: true,
+          match: { title: overallBest.title, year: overallBest.year, quality: overallBest.quality, server: overallBest.server },
+          serversSearched: servers.length,
+        });
+      }
+
+      // If global search failed, try section-specific search as fallback
+      // Only do this if we have cached section info (don't detect on the fly)
+      const cachedSections = mediaType === "tv" ? config?.auto_tv_section_id : config?.auto_movie_section_id;
+      if (cachedSections) {
+        try {
+          const sections = JSON.parse(cachedSections as string) as { server: string; id: string }[];
+          const sectionResults = await Promise.allSettled(
+            sections.map(async (sec) => {
+              const server = servers.find((s) => s.name === sec.server);
+              if (!server) return null;
+              const path = `/library/sections/${sec.id}/all?title=${encodeURIComponent(title)}`;
+              const data = await plexFetch(server.uri, path, plexToken) as { MediaContainer?: { Metadata?: Array<Record<string, unknown>> } } | null;
+              if (!data) return null;
+              const items = data?.MediaContainer?.Metadata || [];
+              return findBestMatch(items, title, year, mediaType, server.name);
+            })
+          );
+
+          for (const r of sectionResults) {
+            if (r.status === "fulfilled" && r.value) {
+              if (!overallBest || r.value.score > overallBest.score) {
+                overallBest = r.value;
+              }
+            }
+          }
+
+          if (overallBest) {
+            return jsonResponse({
+              available: true,
+              match: { title: overallBest.title, year: overallBest.year, quality: overallBest.quality, server: overallBest.server },
+              serversSearched: servers.length,
+            });
+          }
+        } catch { /* ignore parse errors */ }
+      }
+
+      return jsonResponse({ available: false, match: null, serversSearched: servers.length });
+    }
+
+    // --- DETECT-SECTIONS (separate action, run manually from admin) ---
+    if (action === "detect-sections") {
+      let servers: ServerInfo[];
+      try {
+        servers = await getCachedServers(plexToken, supabase, config);
+      } catch (err) {
+        return jsonResponse({ error: err.message }, 400);
+      }
+
+      const movieSections: { server: string; id: string }[] = [];
+      const tvSections: { server: string; id: string }[] = [];
+
+      await Promise.allSettled(
+        servers.map(async (server) => {
+          const data = await plexFetch(server.uri, "/library/sections", plexToken) as { MediaContainer?: { Directory?: Array<{ key: string; type: string }> } } | null;
+          if (!data) return;
+          const dirs = data?.MediaContainer?.Directory || [];
+          for (const d of dirs) {
+            if (d.type === "movie") movieSections.push({ server: server.name, id: String(d.key) });
+            if (d.type === "show") tvSections.push({ server: server.name, id: String(d.key) });
+          }
+        })
+      );
+
+      await supabase
+        .from("plex_server_config")
+        .update({
+          auto_movie_section_id: movieSections.length > 0 ? JSON.stringify(movieSections) : null,
+          auto_tv_section_id: tvSections.length > 0 ? JSON.stringify(tvSections) : null,
+        })
+        .eq("id", 1);
+
+      return jsonResponse({ movieSections, tvSections });
     }
 
     return jsonResponse({ error: `Unknown action: ${action}` }, 400);

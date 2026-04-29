@@ -51,12 +51,24 @@ export const plexService = {
     const params = new URLSearchParams({ action: 'search', title, media_type: mediaType });
     if (year) params.set('year', String(year));
 
-    const res = await fetch(`${PLEX_PROXY_URL}?${params}`, { headers });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || `Plex check failed (${res.status})`);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+
+    try {
+      const res = await fetch(`${PLEX_PROXY_URL}?${params}`, { headers, signal: controller.signal });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Plex check failed (${res.status})`);
+      }
+      return res.json();
+    } catch (e: any) {
+      if (e.name === 'AbortError') {
+        throw new Error('Plex check timed out. Try again.');
+      }
+      throw e;
+    } finally {
+      clearTimeout(timeout);
     }
-    return res.json();
   },
 
   async testConnection(serverUrl?: string): Promise<{ success: boolean; serverName?: string; connectionMethod?: string; error?: string }> {
