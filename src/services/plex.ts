@@ -9,7 +9,9 @@ export interface PlexAvailability {
     title: string;
     year: number;
     quality: string | null;
+    server?: string;
   };
+  serversSearched?: number;
   error?: string;
 }
 

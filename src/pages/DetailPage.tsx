@@ -618,6 +618,11 @@ export default function DetailPage() {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                         Available on Plex
+                        {plexAvailability?.match?.server && (
+                          <span className="ml-1 px-2 py-0.5 rounded text-xs bg-green-600/40 text-green-100">
+                            {plexAvailability.match.server}
+                          </span>
+                        )}
                         {plexAvailability?.match?.quality && (
                           <span className="ml-1 px-2 py-0.5 rounded text-xs bg-green-600/50 text-green-100">
                             {plexAvailability.match.quality}
@@ -651,6 +656,11 @@ export default function DetailPage() {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                         Not on Plex
+                        {plexAvailability?.serversSearched && plexAvailability.serversSearched > 1 && (
+                          <span className="text-xs text-white/40 ml-1">
+                            ({plexAvailability.serversSearched} servers checked)
+                          </span>
+                        )}
                       </div>
                       {!plexRequest && user && (
                         <button
