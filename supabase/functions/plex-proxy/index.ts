@@ -61,6 +61,7 @@ function titleSimilarity(searchTitle: string, resultTitle: string): number {
 interface ServerInfo {
   uri: string;
   name: string;
+  accessToken: string;
 }
 
 interface PlexConnection {
@@ -73,6 +74,7 @@ interface PlexConnection {
 interface PlexResource {
   name: string;
   provides: string;
+  accessToken: string;
   connections: PlexConnection[];
 }
 
@@ -108,7 +110,7 @@ async function discoverServers(plexToken: string): Promise<ServerInfo[]> {
   const results: ServerInfo[] = [];
   for (const server of servers) {
     const uri = pickBestConnection(server.connections || []);
-    if (uri) results.push({ uri, name: server.name });
+    if (uri) results.push({ uri, name: server.name, accessToken: server.accessToken || plexToken });
   }
 
   if (results.length === 0) {
@@ -261,7 +263,7 @@ Deno.serve(async (req: Request) => {
       const allSections: { id: string; title: string; type: string }[] = [];
       await Promise.allSettled(
         servers.map(async (server) => {
-          const data = await plexFetch(server.uri, "/library/sections", plexToken) as { MediaContainer?: { Directory?: Array<{ key: string; title: string; type: string }> } } | null;
+          const data = await plexFetch(server.uri, "/library/sections", server.accessToken) as { MediaContainer?: { Directory?: Array<{ key: string; title: string; type: string }> } } | null;
           if (!data) return;
           const dirs = data?.MediaContainer?.Directory || [];
           for (const s of dirs) {
@@ -297,7 +299,7 @@ Deno.serve(async (req: Request) => {
       const results = await Promise.allSettled(
         servers.map(async (server) => {
           const path = `/hubs/search?query=${encodeURIComponent(title)}&includeCollections=0&includeExternalMedia=0`;
-          const data = await plexFetch(server.uri, path, plexToken, 8000) as { MediaContainer?: { Hub?: Array<{ type: string; Metadata?: Array<Record<string, unknown>> }> } } | null;
+          const data = await plexFetch(server.uri, path, server.accessToken, 8000) as { MediaContainer?: { Hub?: Array<{ type: string; Metadata?: Array<Record<string, unknown>> }> } } | null;
           if (!data) return null;
 
           // Extract items from all hubs
@@ -341,7 +343,7 @@ Deno.serve(async (req: Request) => {
               const server = servers.find((s) => s.name === sec.server);
               if (!server) return null;
               const path = `/library/sections/${sec.id}/all?title=${encodeURIComponent(title)}`;
-              const data = await plexFetch(server.uri, path, plexToken) as { MediaContainer?: { Metadata?: Array<Record<string, unknown>> } } | null;
+              const data = await plexFetch(server.uri, path, server.accessToken) as { MediaContainer?: { Metadata?: Array<Record<string, unknown>> } } | null;
               if (!data) return null;
               const items = data?.MediaContainer?.Metadata || [];
               return findBestMatch(items, title, year, mediaType, server.name);
@@ -383,7 +385,7 @@ Deno.serve(async (req: Request) => {
 
       await Promise.allSettled(
         servers.map(async (server) => {
-          const data = await plexFetch(server.uri, "/library/sections", plexToken) as { MediaContainer?: { Directory?: Array<{ key: string; type: string }> } } | null;
+          const data = await plexFetch(server.uri, "/library/sections", server.accessToken) as { MediaContainer?: { Directory?: Array<{ key: string; type: string }> } } | null;
           if (!data) return;
           const dirs = data?.MediaContainer?.Directory || [];
           for (const d of dirs) {
