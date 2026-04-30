@@ -1,12 +1,12 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
-import { ProfileProvider } from './contexts/ProfileContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { ToastContainer } from './components/ui/ToastContainer';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { AdminRoute } from './components/auth/AdminRoute';
 import AuthPage from './pages/AuthPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
+import PendingApprovalPage from './pages/PendingApprovalPage';
 import Dashboard from './pages/Dashboard';
 import SearchPage from './pages/SearchPage';
 import DetailPage from './pages/DetailPage';
@@ -16,9 +16,7 @@ import ListDetailPage from './pages/ListDetailPage';
 import CalendarPage from './pages/CalendarPage';
 import SocialPage from './pages/SocialPage';
 import RecommendationsPage from './pages/RecommendationsPage';
-import ManageProfilesPage from './pages/ManageProfilesPage';
 import { PersonPage } from './pages/PersonPage';
-import { ProfileSelector } from './components/profile/ProfileSelector';
 import { NotificationsPage } from './pages/NotificationsPage';
 import DiscoveryPage from './pages/DiscoveryPage';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
@@ -30,33 +28,18 @@ import { AuditLogPage } from './pages/admin/AuditLogPage';
 import PlexRequestsPage from './pages/PlexRequestsPage';
 import AdminPlexRequestsPage from './pages/admin/PlexRequestsPage';
 import PlexSettingsPage from './pages/admin/PlexSettingsPage';
+import { UserApprovalPage } from './pages/admin/UserApprovalPage';
 
 function App() {
   return (
     <Router>
       <AuthProvider>
-        <ProfileProvider>
           <ToastProvider>
             <ToastContainer />
             <Routes>
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
-          <Route
-            path="/profiles/select"
-            element={
-              <ProtectedRoute>
-                <ProfileSelector />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/profiles/manage"
-            element={
-              <ProtectedRoute>
-                <ManageProfilesPage />
-              </ProtectedRoute>
-            }
-          />
+          <Route path="/pending-approval" element={<PendingApprovalPage />} />
           <Route
             path="/"
             element={
@@ -225,10 +208,17 @@ function App() {
               </AdminRoute>
             }
           />
+          <Route
+            path="/admin/approvals"
+            element={
+              <AdminRoute>
+                <UserApprovalPage />
+              </AdminRoute>
+            }
+          />
           <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </ToastProvider>
-        </ProfileProvider>
       </AuthProvider>
     </Router>
   );

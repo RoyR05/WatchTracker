@@ -18,7 +18,6 @@ export interface PlexAvailability {
 export interface PlexRequest {
   id: string;
   user_id: string;
-  profile_id: string | null;
   tmdb_id: number;
   media_type: 'movie' | 'tv';
   title: string;
@@ -92,7 +91,7 @@ export const plexService = {
 
   async submitRequest(
     userId: string,
-    profileId: string | null,
+    _profileId: string | null,
     tmdbId: number,
     mediaType: 'movie' | 'tv',
     title: string,
@@ -102,7 +101,6 @@ export const plexService = {
       .from('plex_requests')
       .insert({
         user_id: userId,
-        profile_id: profileId,
         tmdb_id: tmdbId,
         media_type: mediaType,
         title,
@@ -118,7 +116,7 @@ export const plexService = {
 
   async reportBadFile(
     userId: string,
-    profileId: string | null,
+    _profileId: string | null,
     tmdbId: number,
     mediaType: 'movie' | 'tv',
     title: string,
@@ -128,7 +126,6 @@ export const plexService = {
       .from('plex_requests')
       .insert({
         user_id: userId,
-        profile_id: profileId,
         tmdb_id: tmdbId,
         media_type: mediaType,
         title,

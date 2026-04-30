@@ -3,7 +3,6 @@ import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAdmin } from '../../hooks/useAdmin';
 import { supabase } from '../../lib/supabase';
-import { ProfileSwitcher } from '../profile/ProfileSwitcher';
 
 interface LayoutProps {
   children: ReactNode;
@@ -193,7 +192,13 @@ export function Layout({ children }: LayoutProps) {
               </div>
             </div>
             <div className="flex items-center space-x-4">
-              <ProfileSwitcher />
+              <NavLink
+                to="/profile"
+                className="flex items-center justify-center w-8 h-8 rounded-full bg-primary-600 text-white text-sm font-medium hover:bg-primary-500 transition-colors"
+                title={profile?.username || 'Profile'}
+              >
+                {profile?.username?.[0]?.toUpperCase() || 'U'}
+              </NavLink>
               <NavLink
                 to="/notifications"
                 className="relative text-gray-300 hover:text-white transition-colors"

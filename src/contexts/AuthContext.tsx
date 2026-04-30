@@ -12,6 +12,7 @@ interface AuthContextType {
   loading: boolean;
   signUp: (email: string, password: string, username: string) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
+  signInWithGoogle: () => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<Profile>) => Promise<{ error: Error | null }>;
 }
@@ -53,29 +54,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function loadProfile(userId: string) {
     try {
-      console.log('[Auth] Loading profile for user:', userId);
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .maybeSingle();
 
-      if (error) {
-        console.error('[Auth] Error fetching profile:', error);
-        throw error;
-      }
+      if (error) throw error;
 
       if (!data) {
-        console.log('[Auth] No profile found, creating one...');
         const { data: userData } = await supabase.auth.getUser();
-        const email = userData?.user?.email || '';
-        let baseUsername = email.split('@')[0] || 'user';
+        const authUser = userData?.user;
+        const displayName = authUser?.user_metadata?.full_name || authUser?.user_metadata?.name;
+        const email = authUser?.email || '';
+        let baseUsername = displayName
+          ? displayName.toLowerCase().replace(/\s+/g, '').slice(0, 20)
+          : email.split('@')[0] || 'user';
         let username = baseUsername;
         let attempt = 0;
         let profileCreated = false;
 
         while (attempt < 10) {
-          console.log(`[Auth] Attempting to create profile with username: ${username} (attempt ${attempt + 1})`);
           const { data: newProfile, error: createError } = await supabase
             .from('profiles')
             .insert([{
@@ -87,14 +86,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             .single();
 
           if (!createError && newProfile) {
-            console.log('[Auth] Profile created successfully:', newProfile);
             setProfile(newProfile);
             profileCreated = true;
             break;
           }
 
           if (createError) {
-            console.log('[Auth] Profile creation error:', createError);
             if (createError.code === '23505') {
               attempt++;
               username = `${baseUsername}${Math.floor(Math.random() * 10000)}`;
@@ -109,11 +106,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           throw new Error('Failed to create unique username after 10 attempts');
         }
       } else {
-        console.log('[Auth] Profile loaded:', data);
         setProfile(data);
       }
     } catch (error) {
-      console.error('[Auth] Fatal error in loadProfile:', error);
+      console.error('[Auth] Error in loadProfile:', error);
       setProfile(null);
     } finally {
       setLoading(false);
@@ -160,6 +156,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  async function signInWithGoogle() {
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin,
+        },
+      });
+
+      if (error) throw error;
+      return { error: null };
+    } catch (error) {
+      return { error: error as Error };
+    }
+  }
+
   async function signOut() {
     await supabase.auth.signOut();
     setUser(null);
@@ -193,6 +205,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loading,
     signUp,
     signIn,
+    signInWithGoogle,
     signOut,
     updateProfile,
   };

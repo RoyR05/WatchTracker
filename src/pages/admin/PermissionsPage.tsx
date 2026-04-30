@@ -66,24 +66,16 @@ export function PermissionsPage() {
 
       const newAllowedState = !existingPerm?.is_allowed;
 
-      if (existingPerm) {
-        const { error } = await supabase
-          .from('global_share_permissions')
-          .update({ is_allowed: newAllowedState })
-          .eq('user_id', userId)
-          .eq('can_share_with_user_id', canShareWithId);
-
-        if (error) throw error;
+      if (newAllowedState) {
+        await supabase.rpc('grant_bidirectional_share', {
+          user_a: userId,
+          user_b: canShareWithId,
+        });
       } else {
-        const { error } = await supabase
-          .from('global_share_permissions')
-          .insert({
-            user_id: userId,
-            can_share_with_user_id: canShareWithId,
-            is_allowed: true,
-          });
-
-        if (error) throw error;
+        await supabase.rpc('revoke_bidirectional_share', {
+          user_a: userId,
+          user_b: canShareWithId,
+        });
       }
 
       const fromUser = users.find((u) => u.id === userId);
@@ -98,14 +90,23 @@ export function PermissionsPage() {
           : `You can no longer share content with ${toUser?.email}`,
       });
 
+      await supabase.rpc('create_notification', {
+        p_user_id: canShareWithId,
+        p_type: newAllowedState ? 'permission_granted' : 'permission_revoked',
+        p_title: newAllowedState ? 'Sharing Permission Granted' : 'Sharing Permission Revoked',
+        p_message: newAllowedState
+          ? `You can now share content with ${fromUser?.email}`
+          : `You can no longer share content with ${fromUser?.email}`,
+      });
+
       await supabase.rpc('log_admin_action', {
         p_action_type: newAllowedState ? 'permission_granted' : 'permission_revoked',
         p_target_user_id: userId,
-        p_details: `${newAllowedState ? 'Granted' : 'Revoked'} permission for ${fromUser?.email} to share with ${toUser?.email}`,
+        p_details: `${newAllowedState ? 'Granted' : 'Revoked'} bidirectional sharing between ${fromUser?.email} and ${toUser?.email}`,
       });
 
       addToast(
-        `Permission ${newAllowedState ? 'granted' : 'revoked'} successfully`,
+        `Permission ${newAllowedState ? 'granted' : 'revoked'} (bidirectional)`,
         'success'
       );
 
@@ -213,8 +214,8 @@ export function PermissionsPage() {
 
         <div className="bg-gray-800 rounded-lg p-4">
           <div className="mb-4 text-sm text-gray-400">
-            <p>✓ = User can share with recipient | ✗ = User cannot share with recipient</p>
-            <p className="mt-1">Click any cell to toggle the permission</p>
+            <p>✓ = Users can share with each other | ✗ = Sharing blocked</p>
+            <p className="mt-1">Click any cell to toggle the permission (always bidirectional)</p>
           </div>
 
           <div className="overflow-x-auto">
@@ -284,12 +285,11 @@ export function PermissionsPage() {
         <div className="bg-blue-900 bg-opacity-30 border border-blue-700 rounded-lg p-4">
           <h3 className="text-blue-400 font-semibold mb-2">How it works</h3>
           <ul className="text-gray-300 text-sm space-y-1">
-            <li>• Each row represents a user who wants to share content</li>
-            <li>• Each column represents a potential recipient</li>
-            <li>• Green checkmarks (✓) mean sharing is allowed</li>
-            <li>• Red crosses (✗) mean sharing is blocked</li>
-            <li>• Users will receive notifications when their permissions change</li>
-            <li>• Attempting to share without permission will show an error message</li>
+            <li>• Permissions are always bidirectional: granting A to share with B also grants B to share with A</li>
+            <li>• Green checkmarks mean sharing is allowed in both directions</li>
+            <li>• Red crosses mean sharing is blocked in both directions</li>
+            <li>• Both users receive notifications when permissions change</li>
+            <li>• The admin can always share with everyone (broadcast enabled)</li>
           </ul>
         </div>
       </div>

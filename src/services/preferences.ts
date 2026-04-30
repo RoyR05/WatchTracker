@@ -17,7 +17,6 @@ export interface ContentMetadata {
 export interface UserPreference {
   id: string;
   user_id: string;
-  profile_id: string | null;
   tmdb_id: number;
   media_type: MediaType;
   preference_type: PreferenceType;
@@ -38,7 +37,7 @@ export const preferencesService = {
     tmdbId: number,
     mediaType: MediaType,
     preferenceType: 'like' | 'dislike',
-    profileId?: string | null,
+    _profileId?: string | null,
     contentMetadata?: ContentMetadata
   ): Promise<{ success: boolean; error?: string }> {
     try {
@@ -55,21 +54,19 @@ export const preferencesService = {
         .eq('user_id', user.id)
         .eq('tmdb_id', tmdbId)
         .eq('media_type', mediaType)
-        .eq('preference_type', oppositeType)
-        .is('profile_id', profileId || null);
+        .eq('preference_type', oppositeType);
 
       const { error } = await supabase
         .from('user_preferences')
         .upsert({
           user_id: user.id,
-          profile_id: profileId || null,
           tmdb_id: tmdbId,
           media_type: mediaType,
           preference_type: preferenceType,
           tag_value: null,
           content_metadata: contentMetadata || {},
         }, {
-          onConflict: 'user_id,profile_id,tmdb_id,media_type,preference_type,tag_value',
+          onConflict: 'user_id,tmdb_id,media_type,preference_type,tag_value',
           ignoreDuplicates: false
         });
 
@@ -89,7 +86,7 @@ export const preferencesService = {
     tmdbId: number,
     mediaType: MediaType,
     preferenceType: 'like' | 'dislike',
-    profileId?: string | null
+    _profileId?: string | null
   ): Promise<{ success: boolean; error?: string }> {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -103,8 +100,7 @@ export const preferencesService = {
         .eq('user_id', user.id)
         .eq('tmdb_id', tmdbId)
         .eq('media_type', mediaType)
-        .eq('preference_type', preferenceType)
-        .is('profile_id', profileId || null);
+        .eq('preference_type', preferenceType);
 
       if (error) {
         console.error('Error removing preference:', error);
@@ -121,7 +117,7 @@ export const preferencesService = {
   async getPreference(
     tmdbId: number,
     mediaType: MediaType,
-    profileId?: string | null
+    _profileId?: string | null
   ): Promise<'like' | 'dislike' | null> {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -134,7 +130,6 @@ export const preferencesService = {
         .eq('tmdb_id', tmdbId)
         .eq('media_type', mediaType)
         .in('preference_type', ['like', 'dislike'])
-        .is('profile_id', profileId || null)
         .maybeSingle();
 
       if (error || !data) return null;
@@ -146,9 +141,7 @@ export const preferencesService = {
     }
   },
 
-  async getPreferences(
-    profileId?: string | null
-  ): Promise<UserPreference[]> {
+  async getPreferences(): Promise<UserPreference[]> {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return [];
@@ -157,7 +150,6 @@ export const preferencesService = {
         .from('user_preferences')
         .select('*')
         .eq('user_id', user.id)
-        .is('profile_id', profileId || null)
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -172,10 +164,7 @@ export const preferencesService = {
     }
   },
 
-  async getLikedContent(
-    mediaType?: MediaType,
-    profileId?: string | null
-  ): Promise<number[]> {
+  async getLikedContent(mediaType?: MediaType): Promise<number[]> {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return [];
@@ -184,8 +173,7 @@ export const preferencesService = {
         .from('user_preferences')
         .select('tmdb_id')
         .eq('user_id', user.id)
-        .eq('preference_type', 'like')
-        .is('profile_id', profileId || null);
+        .eq('preference_type', 'like');
 
       if (mediaType) {
         query = query.eq('media_type', mediaType);
@@ -205,10 +193,7 @@ export const preferencesService = {
     }
   },
 
-  async getDislikedContent(
-    mediaType?: MediaType,
-    profileId?: string | null
-  ): Promise<number[]> {
+  async getDislikedContent(mediaType?: MediaType): Promise<number[]> {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return [];
@@ -217,8 +202,7 @@ export const preferencesService = {
         .from('user_preferences')
         .select('tmdb_id')
         .eq('user_id', user.id)
-        .eq('preference_type', 'dislike')
-        .is('profile_id', profileId || null);
+        .eq('preference_type', 'dislike');
 
       if (mediaType) {
         query = query.eq('media_type', mediaType);
@@ -241,8 +225,7 @@ export const preferencesService = {
   async addTag(
     tmdbId: number,
     mediaType: MediaType,
-    tagValue: string,
-    profileId?: string | null
+    tagValue: string
   ): Promise<{ success: boolean; error?: string }> {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -254,7 +237,6 @@ export const preferencesService = {
         .from('user_preferences')
         .insert({
           user_id: user.id,
-          profile_id: profileId || null,
           tmdb_id: tmdbId,
           media_type: mediaType,
           preference_type: 'tag',
@@ -276,8 +258,7 @@ export const preferencesService = {
   async removeTag(
     tmdbId: number,
     mediaType: MediaType,
-    tagValue: string,
-    profileId?: string | null
+    tagValue: string
   ): Promise<{ success: boolean; error?: string }> {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -292,8 +273,7 @@ export const preferencesService = {
         .eq('tmdb_id', tmdbId)
         .eq('media_type', mediaType)
         .eq('preference_type', 'tag')
-        .eq('tag_value', tagValue.toLowerCase().trim())
-        .is('profile_id', profileId || null);
+        .eq('tag_value', tagValue.toLowerCase().trim());
 
       if (error) {
         console.error('Error removing tag:', error);
@@ -309,8 +289,7 @@ export const preferencesService = {
 
   async getTags(
     tmdbId: number,
-    mediaType: MediaType,
-    profileId?: string | null
+    mediaType: MediaType
   ): Promise<string[]> {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -322,8 +301,7 @@ export const preferencesService = {
         .eq('user_id', user.id)
         .eq('tmdb_id', tmdbId)
         .eq('media_type', mediaType)
-        .eq('preference_type', 'tag')
-        .is('profile_id', profileId || null);
+        .eq('preference_type', 'tag');
 
       if (error) {
         console.error('Error getting tags:', error);
@@ -339,8 +317,7 @@ export const preferencesService = {
 
   async getContentByTag(
     tagValue: string,
-    mediaType?: MediaType,
-    profileId?: string | null
+    mediaType?: MediaType
   ): Promise<number[]> {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -351,8 +328,7 @@ export const preferencesService = {
         .select('tmdb_id')
         .eq('user_id', user.id)
         .eq('preference_type', 'tag')
-        .eq('tag_value', tagValue.toLowerCase().trim())
-        .is('profile_id', profileId || null);
+        .eq('tag_value', tagValue.toLowerCase().trim());
 
       if (mediaType) {
         query = query.eq('media_type', mediaType);
@@ -372,7 +348,7 @@ export const preferencesService = {
     }
   },
 
-  async getAllTags(profileId?: string | null): Promise<string[]> {
+  async getAllTags(): Promise<string[]> {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return [];
@@ -382,7 +358,6 @@ export const preferencesService = {
         .select('tag_value')
         .eq('user_id', user.id)
         .eq('preference_type', 'tag')
-        .is('profile_id', profileId || null)
         .not('tag_value', 'is', null);
 
       if (error) {
@@ -399,9 +374,9 @@ export const preferencesService = {
     }
   },
 
-  async getPreferenceStats(profileId?: string | null): Promise<PreferenceStats> {
+  async getPreferenceStats(): Promise<PreferenceStats> {
     try {
-      const preferences = await this.getPreferences(profileId);
+      const preferences = await this.getPreferences();
 
       const likes = preferences.filter(p => p.preference_type === 'like').length;
       const dislikes = preferences.filter(p => p.preference_type === 'dislike').length;

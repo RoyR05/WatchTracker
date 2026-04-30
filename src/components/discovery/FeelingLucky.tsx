@@ -1,53 +1,20 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useProfile } from '../../contexts/ProfileContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { tmdbService } from '../../services/tmdb';
-import { getTopAffinities } from '../../services/interactions';
-import type { Movie, TVShow } from '../../services/tmdb';
-
-const GENRE_MAP: Record<string, string> = {
-  '28': 'Action',
-  '12': 'Adventure',
-  '16': 'Animation',
-  '35': 'Comedy',
-  '80': 'Crime',
-  '99': 'Documentary',
-  '18': 'Drama',
-  '10751': 'Family',
-  '14': 'Fantasy',
-  '36': 'History',
-  '27': 'Horror',
-  '10402': 'Music',
-  '9648': 'Mystery',
-  '10749': 'Romance',
-  '878': 'Science Fiction',
-  '10770': 'TV Movie',
-  '53': 'Thriller',
-  '10752': 'War',
-  '37': 'Western'
-};
 
 export const FeelingLucky = () => {
-  const { currentProfile } = useProfile();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
 
   const handleFeelingLucky = async () => {
-    if (!currentProfile) return;
+    if (!user) return;
 
     setLoading(true);
     try {
-      const genreAffinities = await getTopAffinities(currentProfile.id, 'genre', 5);
-
-      let selectedGenres: string[] = [];
-      if (genreAffinities.length > 0) {
-        selectedGenres = genreAffinities
-          .slice(0, 2)
-          .map(a => a.affinity_value);
-      } else {
-        const popularGenres = ['28', '35', '18', '878', '53'];
-        selectedGenres = [popularGenres[Math.floor(Math.random() * popularGenres.length)]];
-      }
+      const popularGenres = ['28', '35', '18', '878', '53', '27', '10749', '16'];
+      const selectedGenres = [popularGenres[Math.floor(Math.random() * popularGenres.length)]];
 
       const mediaType = Math.random() > 0.5 ? 'movie' : 'tv';
 
@@ -84,7 +51,7 @@ export const FeelingLucky = () => {
     <button
       onClick={handleFeelingLucky}
       disabled={loading}
-      className="group relative overflow-hidden bg-gradient-to-r from-purple-600 via-pink-600 to-red-600 hover:from-purple-700 hover:via-pink-700 hover:to-red-700 text-white font-bold py-4 px-8 rounded-lg shadow-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105"
+      className="group relative overflow-hidden bg-gradient-to-r from-teal-600 via-cyan-600 to-blue-600 hover:from-teal-700 hover:via-cyan-700 hover:to-blue-700 text-white font-bold py-4 px-8 rounded-lg shadow-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105"
     >
       <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
       <div className="relative flex items-center gap-3">

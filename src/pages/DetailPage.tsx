@@ -7,7 +7,6 @@ import { AddToListModal } from '../components/lists/AddToListModal';
 import { tmdbService } from '../services/tmdb';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { useProfile } from '../contexts/ProfileContext';
 import { useToast } from '../contexts/ToastContext';
 import { trackInteraction } from '../services/interactions';
 import { preferencesService } from '../services/preferences';
@@ -22,7 +21,6 @@ type WatchlistStatus = 'watching' | 'completed' | 'plan_to_watch' | 'dropped';
 export default function DetailPage() {
   const { mediaType, id } = useParams<{ mediaType: 'movie' | 'tv'; id: string }>();
   const { user } = useAuth();
-  const { currentProfile } = useProfile();
   const toast = useToast();
   const [details, setDetails] = useState<MovieDetails | TVShowDetails | null>(null);
   const [cast, setCast] = useState<CastMember[]>([]);
@@ -42,7 +40,7 @@ export default function DetailPage() {
 
   useEffect(() => {
     async function loadDetails() {
-      if (!id || !mediaType || !currentProfile) return;
+      if (!id || !mediaType || !user) return;
 
       try {
         const [detailsData, creditsData, videosData, watchlistData, preferenceData] = await Promise.all([
@@ -58,11 +56,11 @@ export default function DetailPage() {
           supabase
             .from('watchlist_items')
             .select('*')
-            .eq('profile_id', currentProfile.id)
+            .eq('user_id', user.id)
             .eq('tmdb_id', parseInt(id))
             .eq('media_type', mediaType)
             .maybeSingle(),
-          preferencesService.getPreference(parseInt(id), mediaType, currentProfile.id)
+          preferencesService.getPreference(parseInt(id), mediaType)
         ]);
 
         setDetails(detailsData);
@@ -78,7 +76,7 @@ export default function DetailPage() {
         setPreference(preferenceData);
 
         await trackInteraction(
-          currentProfile.id,
+          user.id,
           parseInt(id),
           mediaType,
           'viewed_detail',
@@ -101,7 +99,7 @@ export default function DetailPage() {
     }
 
     loadDetails();
-  }, [id, mediaType, currentProfile]);
+  }, [id, mediaType, user]);
 
   function buildContentMetadata() {
     if (!details) return undefined;
@@ -132,7 +130,7 @@ export default function DetailPage() {
   }
 
   async function handleLike() {
-    if (!user || !currentProfile || !id || !mediaType) {
+    if (!user || !id || !mediaType) {
       toast.error('Please sign in to like content');
       return;
     }
@@ -140,12 +138,12 @@ export default function DetailPage() {
     setUpdating(true);
     try {
       if (preference === 'like') {
-        await preferencesService.removePreference(parseInt(id), mediaType, 'like', currentProfile.id);
+        await preferencesService.removePreference(parseInt(id), mediaType, 'like');
         setPreference(null);
         toast.success('Removed like');
       } else {
         const metadata = buildContentMetadata();
-        await preferencesService.setPreference(parseInt(id), mediaType, 'like', currentProfile.id, metadata);
+        await preferencesService.setPreference(parseInt(id), mediaType, 'like', undefined, metadata);
         setPreference('like');
         toast.success('Added to liked');
       }
@@ -162,7 +160,7 @@ export default function DetailPage() {
   }
 
   async function handleDislike() {
-    if (!user || !currentProfile || !id || !mediaType) {
+    if (!user || !id || !mediaType) {
       toast.error('Please sign in to dislike content');
       return;
     }
@@ -170,12 +168,12 @@ export default function DetailPage() {
     setUpdating(true);
     try {
       if (preference === 'dislike') {
-        await preferencesService.removePreference(parseInt(id), mediaType, 'dislike', currentProfile.id);
+        await preferencesService.removePreference(parseInt(id), mediaType, 'dislike');
         setPreference(null);
         toast.success('Removed dislike');
       } else {
         const metadata = buildContentMetadata();
-        await preferencesService.setPreference(parseInt(id), mediaType, 'dislike', currentProfile.id, metadata);
+        await preferencesService.setPreference(parseInt(id), mediaType, 'dislike', undefined, metadata);
         setPreference('dislike');
         toast.success('Added to disliked');
       }
@@ -192,7 +190,7 @@ export default function DetailPage() {
   }
 
   async function updateWatchlistStatus(status: WatchlistStatus) {
-    if (!user || !id || !mediaType || !currentProfile) return;
+    if (!user || !id || !mediaType) return;
 
     setUpdating(true);
     try {
@@ -216,12 +214,11 @@ export default function DetailPage() {
         setWatchlistItem(data);
 
         if (status === 'completed') {
-          await trackInteraction(currentProfile.id, parseInt(id), mediaType, 'completed');
+          await trackInteraction(user.id, parseInt(id), mediaType, 'completed');
         }
       } else {
         const newItem: Database['public']['Tables']['watchlist_items']['Insert'] = {
           user_id: user.id,
-          profile_id: currentProfile.id,
           tmdb_id: parseInt(id),
           media_type: mediaType,
           status,
@@ -238,9 +235,9 @@ export default function DetailPage() {
         if (error) throw error;
         setWatchlistItem(data);
 
-        await trackInteraction(currentProfile.id, parseInt(id), mediaType, 'added_to_watchlist');
+        await trackInteraction(user.id, parseInt(id), mediaType, 'added_to_watchlist');
         if (status === 'completed') {
-          await trackInteraction(currentProfile.id, parseInt(id), mediaType, 'completed');
+          await trackInteraction(user.id, parseInt(id), mediaType, 'completed');
         }
       }
     } catch (error) {
@@ -302,7 +299,7 @@ export default function DetailPage() {
       const titleStr = 'title' in details ? details.title : details.name;
       const request = await plexService.submitRequest(
         user.id,
-        currentProfile?.id || null,
+        null,
         parseInt(id),
         mediaType,
         titleStr,
@@ -330,7 +327,7 @@ export default function DetailPage() {
       const titleStr = 'title' in details ? details.title : details.name;
       const request = await plexService.reportBadFile(
         user.id,
-        currentProfile?.id || null,
+        null,
         parseInt(id),
         mediaType,
         titleStr,

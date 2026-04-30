@@ -15,6 +15,10 @@ export interface Database {
           username: string
           avatar_url: string | null
           bio: string
+          approval_status: 'pending' | 'approved' | 'rejected'
+          approved_by: string | null
+          approved_at: string | null
+          can_broadcast: boolean
           created_at: string
           updated_at: string
         }
@@ -23,6 +27,10 @@ export interface Database {
           username: string
           avatar_url?: string | null
           bio?: string
+          approval_status?: 'pending' | 'approved' | 'rejected'
+          approved_by?: string | null
+          approved_at?: string | null
+          can_broadcast?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -31,6 +39,10 @@ export interface Database {
           username?: string
           avatar_url?: string | null
           bio?: string
+          approval_status?: 'pending' | 'approved' | 'rejected'
+          approved_by?: string | null
+          approved_at?: string | null
+          can_broadcast?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -39,7 +51,6 @@ export interface Database {
         Row: {
           id: string
           user_id: string
-          profile_id: string | null
           tmdb_id: number
           media_type: 'movie' | 'tv'
           status: 'watching' | 'completed' | 'plan_to_watch' | 'dropped'
@@ -53,7 +64,6 @@ export interface Database {
         Insert: {
           id?: string
           user_id: string
-          profile_id?: string | null
           tmdb_id: number
           media_type: 'movie' | 'tv'
           status?: 'watching' | 'completed' | 'plan_to_watch' | 'dropped'
@@ -67,7 +77,6 @@ export interface Database {
         Update: {
           id?: string
           user_id?: string
-          profile_id?: string | null
           tmdb_id?: number
           media_type?: 'movie' | 'tv'
           status?: 'watching' | 'completed' | 'plan_to_watch' | 'dropped'
@@ -83,7 +92,6 @@ export interface Database {
         Row: {
           id: string
           user_id: string
-          profile_id: string | null
           tmdb_id: number
           season_number: number
           episode_number: number
@@ -94,7 +102,6 @@ export interface Database {
         Insert: {
           id?: string
           user_id: string
-          profile_id?: string | null
           tmdb_id: number
           season_number: number
           episode_number: number
@@ -105,7 +112,6 @@ export interface Database {
         Update: {
           id?: string
           user_id?: string
-          profile_id?: string | null
           tmdb_id?: number
           season_number?: number
           episode_number?: number

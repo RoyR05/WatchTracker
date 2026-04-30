@@ -6,7 +6,6 @@ import { GestureTutorial } from '../components/ui/GestureTutorial';
 import { MediaTypeSwitcher } from '../components/ui/MediaTypeSwitcher';
 import { CollapsibleSection } from '../components/ui/CollapsibleSection';
 import { useToast } from '../contexts/ToastContext';
-import { useProfile } from '../contexts/ProfileContext';
 import { tmdbService } from '../services/tmdb';
 import { userSettingsService } from '../services/userSettings';
 import { supabase } from '../lib/supabase';
@@ -18,7 +17,6 @@ type WatchlistItem = Database['public']['Tables']['watchlist_items']['Row'];
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const { currentProfile } = useProfile();
   const [trending, setTrending] = useState<Array<Movie | TVShow>>([]);
   const [anticipated, setAnticipated] = useState<Array<Movie | TVShow>>([]);
   const [popular, setPopular] = useState<Array<Movie | TVShow>>([]);
@@ -138,7 +136,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     async function loadDashboard() {
-      if (!currentProfile) return;
+      if (!user) return;
 
       try {
         const trendingPromise = tmdbService.getTrending(mediaType, timeWindow, 1, englishOnly);
@@ -147,7 +145,7 @@ export default function Dashboard() {
         const watchlistPromise = supabase
           .from('watchlist_items')
           .select('*')
-          .eq('profile_id', currentProfile.id)
+          .eq('user_id', user.id)
           .eq('status', 'watching')
           .order('updated_at', { ascending: false })
           .limit(10);
@@ -155,7 +153,7 @@ export default function Dashboard() {
         const planToWatchPromise = supabase
           .from('watchlist_items')
           .select('*')
-          .eq('profile_id', currentProfile.id)
+          .eq('user_id', user.id)
           .eq('status', 'plan_to_watch')
           .order('updated_at', { ascending: false })
           .limit(10);
@@ -227,18 +225,16 @@ export default function Dashboard() {
       }
     }
 
-    if (user && currentProfile) {
+    if (user) {
       loadDashboard();
-    } else if (user && !currentProfile) {
-      setLoading(true);
     } else {
       setLoading(false);
     }
-  }, [user, currentProfile, englishOnly]);
+  }, [user, englishOnly]);
 
   useEffect(() => {
     async function loadTrending() {
-      if (!currentProfile) return;
+      if (!user) return;
       setLoadingTrending(true);
       setTrendingPage(1);
       setHasMoreTrending(true);
@@ -276,10 +272,10 @@ export default function Dashboard() {
       }
     }
 
-    if (currentProfile) {
+    if (user) {
       loadAnticipated();
     }
-  }, [mediaType, currentProfile]);
+  }, [mediaType, user]);
 
   useEffect(() => {
     async function loadPopular() {
@@ -299,10 +295,10 @@ export default function Dashboard() {
       }
     }
 
-    if (currentProfile) {
+    if (user) {
       loadPopular();
     }
-  }, [mediaType, currentProfile]);
+  }, [mediaType, user]);
 
   const updateScrollButtons = useCallback(() => {
     const container = scrollContainerRef.current;

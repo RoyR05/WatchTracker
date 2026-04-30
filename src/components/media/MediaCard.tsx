@@ -3,7 +3,6 @@ import { useState, useRef, useEffect } from 'react';
 import { tmdbService } from '../../services/tmdb';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { useProfile } from '../../contexts/ProfileContext';
 import { useToast } from '../../contexts/ToastContext';
 import { useSwipeGesture } from '../../hooks/useSwipeGesture';
 import { useLongPress } from '../../hooks/useLongPress';
@@ -25,7 +24,6 @@ type WatchlistStatus = 'watching' | 'completed' | 'plan_to_watch' | 'dropped';
 
 export function MediaCard({ item, mediaType }: MediaCardProps) {
   const { user } = useAuth();
-  const { currentProfile } = useProfile();
   const toast = useToast();
   const navigate = useNavigate();
   const title = 'title' in item ? item.title : item.name;
@@ -43,26 +41,26 @@ export function MediaCard({ item, mediaType }: MediaCardProps) {
 
   useEffect(() => {
     async function loadPreference() {
-      if (!user || !currentProfile) return;
-      const pref = await preferencesService.getPreference(item.id, mediaType, currentProfile.id);
+      if (!user) return;
+      const pref = await preferencesService.getPreference(item.id, mediaType, user.id);
       setPreference(pref);
     }
     loadPreference();
-  }, [user, currentProfile, item.id, mediaType]);
+  }, [user, item.id, mediaType]);
 
   async function handleLike() {
-    if (!user || !currentProfile) {
+    if (!user) {
       toast.error('Please sign in to like content');
       return;
     }
 
     try {
       if (preference === 'like') {
-        await preferencesService.removePreference(item.id, mediaType, 'like', currentProfile.id);
+        await preferencesService.removePreference(item.id, mediaType, 'like', user.id);
         setPreference(null);
         toast.success('Removed like');
       } else {
-        await preferencesService.setPreference(item.id, mediaType, 'like', currentProfile.id);
+        await preferencesService.setPreference(item.id, mediaType, 'like', user.id);
         setPreference('like');
         toast.success('Added to liked');
       }
@@ -77,18 +75,18 @@ export function MediaCard({ item, mediaType }: MediaCardProps) {
   }
 
   async function handleDislike() {
-    if (!user || !currentProfile) {
+    if (!user) {
       toast.error('Please sign in to dislike content');
       return;
     }
 
     try {
       if (preference === 'dislike') {
-        await preferencesService.removePreference(item.id, mediaType, 'dislike', currentProfile.id);
+        await preferencesService.removePreference(item.id, mediaType, 'dislike', user.id);
         setPreference(null);
         toast.success('Removed dislike');
       } else {
-        await preferencesService.setPreference(item.id, mediaType, 'dislike', currentProfile.id);
+        await preferencesService.setPreference(item.id, mediaType, 'dislike', user.id);
         setPreference('dislike');
         toast.success('Added to disliked');
       }
@@ -103,7 +101,7 @@ export function MediaCard({ item, mediaType }: MediaCardProps) {
   }
 
   async function addToWatchlist(status: WatchlistStatus) {
-    if (!user || !currentProfile) {
+    if (!user) {
       toast.error('Please sign in to add to watchlist');
       return;
     }
@@ -112,7 +110,7 @@ export function MediaCard({ item, mediaType }: MediaCardProps) {
       const { data: existing } = await supabase
         .from('watchlist_items')
         .select('id')
-        .eq('profile_id', currentProfile.id)
+        .eq('user_id', user.id)
         .eq('tmdb_id', item.id)
         .eq('media_type', mediaType)
         .maybeSingle();
@@ -126,14 +124,13 @@ export function MediaCard({ item, mediaType }: MediaCardProps) {
       } else {
         const newItem: Database['public']['Tables']['watchlist_items']['Insert'] = {
           user_id: user.id,
-          profile_id: currentProfile.id,
           tmdb_id: item.id,
           media_type: mediaType,
           status,
         };
 
         await supabase.from('watchlist_items').insert(newItem);
-        await trackInteraction(currentProfile.id, item.id, mediaType, 'added_to_watchlist');
+        await trackInteraction(user.id, item.id, mediaType, 'added_to_watchlist');
         toast.success(`Added to ${status}`);
       }
 

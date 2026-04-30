@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { Layout } from '../components/layout/Layout';
 import { CalendarGrid } from '../components/calendar/CalendarGrid';
 import { useAuth } from '../contexts/AuthContext';
-import { useProfile } from '../contexts/ProfileContext';
 import { supabase } from '../lib/supabase';
 import { tmdbService } from '../services/tmdb';
 import type { Database } from '../types/database.types';
@@ -44,7 +43,6 @@ type ViewMode = 'list' | 'calendar';
 
 export default function CalendarPage() {
   const { user } = useAuth();
-  const { currentProfile } = useProfile();
   const [upcomingEpisodes, setUpcomingEpisodes] = useState<UpcomingEpisode[]>([]);
   const [upcomingMovies, setUpcomingMovies] = useState<UpcomingMovie[]>([]);
   const [loading, setLoading] = useState(true);
@@ -54,10 +52,10 @@ export default function CalendarPage() {
 
   useEffect(() => {
     loadUpcomingContent();
-  }, [user, currentProfile]);
+  }, [user]);
 
   async function loadUpcomingContent() {
-    if (!user || !currentProfile) return;
+    if (!user) return;
 
     try {
       setError(null);
@@ -66,7 +64,7 @@ export default function CalendarPage() {
       const { data: watchlistItems, error: watchlistError } = await supabase
         .from('watchlist_items')
         .select('*')
-        .eq('profile_id', currentProfile.id)
+        .eq('user_id', user.id)
         .in('status', ['watching', 'plan_to_watch']);
 
       if (watchlistError) throw watchlistError;

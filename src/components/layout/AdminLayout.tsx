@@ -12,6 +12,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
 
   const navItems = [
     { path: '/admin', label: 'Dashboard', icon: '📊' },
+    { path: '/admin/approvals', label: 'Approvals', icon: '✓' },
     { path: '/admin/users', label: 'Users', icon: '👥' },
     { path: '/admin/permissions', label: 'Permissions', icon: '🔐' },
     { path: '/admin/shares', label: 'Shares', icon: '🔗' },
