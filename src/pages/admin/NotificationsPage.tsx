@@ -36,31 +36,25 @@ export function NotificationsPage() {
   async function loadData() {
     setLoading(true);
     try {
-      const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
-      if (authError) throw authError;
+      const [usersResult, notifsResult] = await Promise.all([
+        supabase.rpc('list_users_for_admin'),
+        supabase.from('notifications').select('*').order('created_at', { ascending: false }).limit(100),
+      ]);
 
-      const userList = (authUsers?.users || []).map((u) => ({
+      if (usersResult.error) throw usersResult.error;
+      if (notifsResult.error) throw notifsResult.error;
+
+      const userList = (usersResult.data || []).map((u: any) => ({
         id: u.id,
         email: u.email || 'No email',
       }));
 
-      const { data: notifs, error: notifsError } = await supabase
-        .from('notifications')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(100);
+      const userMap = new Map(userList.map((u) => [u.id, u.email]));
 
-      if (notifsError) throw notifsError;
-
-      const notifsWithEmails = await Promise.all(
-        (notifs || []).map(async (notif) => {
-          const userData = await supabase.auth.admin.getUserById(notif.user_id);
-          return {
-            ...notif,
-            user_email: userData?.data?.user?.email || 'Unknown',
-          };
-        })
-      );
+      const notifsWithEmails = (notifsResult.data || []).map((notif: any) => ({
+        ...notif,
+        user_email: userMap.get(notif.user_id) || 'Unknown',
+      }));
 
       setUsers(userList);
       setNotifications(notifsWithEmails);

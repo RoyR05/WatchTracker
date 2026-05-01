@@ -47,28 +47,21 @@ export function AuditLogPage() {
   async function loadLogs() {
     setLoading(true);
     try {
-      const { data: logsData, error: logsError } = await supabase
-        .from('admin_audit_log')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(500);
+      const [usersResult, logsResult] = await Promise.all([
+        supabase.rpc('list_users_for_admin'),
+        supabase.from('admin_audit_log').select('*').order('created_at', { ascending: false }).limit(500),
+      ]);
 
-      if (logsError) throw logsError;
+      if (usersResult.error) throw usersResult.error;
+      if (logsResult.error) throw logsResult.error;
 
-      const logsWithEmails = await Promise.all(
-        (logsData || []).map(async (log) => {
-          const [adminData, targetData] = await Promise.all([
-            supabase.auth.admin.getUserById(log.admin_user_id),
-            log.target_user_id ? supabase.auth.admin.getUserById(log.target_user_id) : null,
-          ]);
+      const userMap = new Map((usersResult.data || []).map((u: any) => [u.id, u.email || 'Unknown']));
 
-          return {
-            ...log,
-            admin_email: adminData?.data?.user?.email || 'Unknown',
-            target_user_email: targetData?.data?.user?.email || null,
-          };
-        })
-      );
+      const logsWithEmails = (logsResult.data || []).map((log: any) => ({
+        ...log,
+        admin_email: userMap.get(log.admin_user_id) || 'Unknown',
+        target_user_email: log.target_user_id ? (userMap.get(log.target_user_id) || null) : null,
+      }));
 
       setLogs(logsWithEmails);
     } catch (error) {

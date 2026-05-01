@@ -4,12 +4,12 @@ import { AdminLayout } from '../../components/layout/AdminLayout';
 import { useToast } from '../../contexts/ToastContext';
 
 interface ShareData {
-  id: number;
-  list_id: number;
+  id: string;
+  list_id: string;
   list_name: string;
   owner_email: string;
   shared_with_email: string;
-  permission_level: string;
+  can_edit: boolean;
   created_at: string;
   has_permission: boolean;
   list_owner_id: string;
@@ -35,48 +35,46 @@ export function SharesPage() {
   async function loadShares() {
     setLoading(true);
     try {
-      const { data: sharesData, error: sharesError } = await supabase
-        .from('list_shares')
-        .select(`
-          id,
-          list_id,
-          permission_level,
-          created_at,
-          list_owner_id,
-          shared_with_user_id,
-          custom_lists!inner(name)
-        `)
-        .order('created_at', { ascending: false });
+      const [usersResult, sharesResult, permsResult] = await Promise.all([
+        supabase.rpc('list_users_for_admin'),
+        supabase
+          .from('list_shares')
+          .select(`
+            id,
+            list_id,
+            can_edit,
+            created_at,
+            shared_with_user_id,
+            custom_lists!inner(name, user_id)
+          `)
+          .order('created_at', { ascending: false }),
+        supabase.from('global_share_permissions').select('user_id, can_share_with_user_id, is_allowed'),
+      ]);
 
-      if (sharesError) throw sharesError;
+      if (usersResult.error) throw usersResult.error;
+      if (sharesResult.error) throw sharesResult.error;
 
-      const sharesWithDetails = await Promise.all(
-        (sharesData || []).map(async (share: any) => {
-          const [ownerData, recipientData, permData] = await Promise.all([
-            supabase.auth.admin.getUserById(share.list_owner_id),
-            supabase.auth.admin.getUserById(share.shared_with_user_id),
-            supabase
-              .from('global_share_permissions')
-              .select('is_allowed')
-              .eq('user_id', share.list_owner_id)
-              .eq('can_share_with_user_id', share.shared_with_user_id)
-              .maybeSingle(),
-          ]);
+      const userMap = new Map<string, string>((usersResult.data || []).map((u: any) => [u.id, u.email || 'Unknown']));
 
-          return {
-            id: share.id,
-            list_id: share.list_id,
-            list_name: share.custom_lists.name,
-            owner_email: ownerData?.data?.user?.email || 'Unknown',
-            shared_with_email: recipientData?.data?.user?.email || 'Unknown',
-            permission_level: share.permission_level,
-            created_at: share.created_at,
-            has_permission: permData?.data?.is_allowed || false,
-            list_owner_id: share.list_owner_id,
-            shared_with_user_id: share.shared_with_user_id,
-          };
-        })
-      );
+      const sharesWithDetails = (sharesResult.data || []).map((share: any) => {
+        const listOwnerId = share.custom_lists.user_id;
+        const perm = (permsResult.data || []).find(
+          (p: any) => p.user_id === listOwnerId && p.can_share_with_user_id === share.shared_with_user_id
+        );
+
+        return {
+          id: share.id,
+          list_id: share.list_id,
+          list_name: share.custom_lists.name,
+          owner_email: userMap.get(listOwnerId) || 'Unknown',
+          shared_with_email: userMap.get(share.shared_with_user_id) || 'Unknown',
+          can_edit: share.can_edit,
+          created_at: share.created_at,
+          has_permission: perm?.is_allowed || false,
+          list_owner_id: listOwnerId,
+          shared_with_user_id: share.shared_with_user_id,
+        };
+      });
 
       setShares(sharesWithDetails);
     } catch (error) {
@@ -109,7 +107,7 @@ export function SharesPage() {
     setFilteredShares(filtered);
   }
 
-  async function revokeShare(shareId: number, listName: string, ownerEmail: string, recipientEmail: string) {
+  async function revokeShare(shareId: string, listName: string, ownerEmail: string, recipientEmail: string) {
     if (!confirm(`Revoke share of "${listName}" with ${recipientEmail}?`)) return;
 
     try {
@@ -279,7 +277,7 @@ export function SharesPage() {
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-300">
                         <span className="px-2 py-1 bg-gray-600 rounded text-xs">
-                          {share.permission_level}
+                          {share.can_edit ? 'Can Edit' : 'View Only'}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-sm">

@@ -27,22 +27,21 @@ export function PermissionsPage() {
   async function loadData() {
     setLoading(true);
     try {
-      const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
-      if (authError) throw authError;
+      const [usersResult, permsResult] = await Promise.all([
+        supabase.rpc('list_users_for_admin'),
+        supabase.from('global_share_permissions').select('*'),
+      ]);
 
-      const userList = (authUsers?.users || []).map((u) => ({
+      if (usersResult.error) throw usersResult.error;
+      if (permsResult.error) throw permsResult.error;
+
+      const userList = (usersResult.data || []).map((u: any) => ({
         id: u.id,
         email: u.email || 'No email',
       }));
 
-      const { data: perms, error: permsError } = await supabase
-        .from('global_share_permissions')
-        .select('*');
-
-      if (permsError) throw permsError;
-
       setUsers(userList);
-      setPermissions(perms || []);
+      setPermissions(permsResult.data || []);
     } catch (error) {
       console.error('Error loading data:', error);
       addToast('Failed to load permissions data', 'error');
