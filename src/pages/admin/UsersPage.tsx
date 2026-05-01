@@ -32,18 +32,21 @@ function UserDetailsDrawer({ user, onClose, onRefresh }: UserDetailsDrawerProps)
     }
 
     try {
-      const { error } = await supabase.auth.admin.updateUserById(user.id, {
-        password: newPassword,
+      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-update-user-password`;
+      const { data: { session } } = await supabase.auth.getSession();
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session?.access_token}`,
+          'Content-Type': 'application/json',
+          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({ user_id: user.id, new_password: newPassword }),
       });
 
-      if (error) throw error;
-
-      await supabase.rpc('create_notification', {
-        p_user_id: user.id,
-        p_type: 'password_reset',
-        p_title: 'Password Reset',
-        p_message: 'Your password has been reset by the administrator. Please use your new password to log in.',
-      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Failed to reset password');
 
       await supabase.rpc('log_admin_action', {
         p_action_type: 'password_reset',
@@ -192,28 +195,18 @@ export function UsersPage() {
   async function loadUsers() {
     setLoading(true);
     try {
-      const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
+      const { data, error } = await supabase.rpc('list_users_for_admin');
 
-      if (authError) throw authError;
+      if (error) throw error;
 
-      const usersWithStats = await Promise.all(
-        (authUsers?.users || []).map(async (user) => {
-          const [profilesCount, listsCount, sharesCount] = await Promise.all([
-            supabase.from('user_profiles').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
-            supabase.from('custom_lists').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
-            supabase.from('list_shares').select('id', { count: 'exact', head: true }).eq('shared_with_user_id', user.id),
-          ]);
-
-          return {
-            id: user.id,
-            email: user.email || 'No email',
-            created_at: user.created_at,
-            profile_count: profilesCount.count || 0,
-            lists_count: listsCount.count || 0,
-            shares_count: sharesCount.count || 0,
-          };
-        })
-      );
+      const usersWithStats: UserData[] = (data || []).map((row: any) => ({
+        id: row.id,
+        email: row.email || 'No email',
+        created_at: row.created_at,
+        profile_count: row.profile_count || 0,
+        lists_count: row.lists_count || 0,
+        shares_count: row.shares_count || 0,
+      }));
 
       setUsers(usersWithStats);
       setFilteredUsers(usersWithStats);
