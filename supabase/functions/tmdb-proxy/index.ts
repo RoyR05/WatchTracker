@@ -1,13 +1,25 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
-const TMDB_API_KEY = "18b845ad05cbcdf63c441e518c2b13fb";
+const TMDB_API_KEY = Deno.env.get('TMDB_API_KEY') ?? '';
 const TMDB_BASE_URL = "https://api.themoviedb.org/3";
+const ALLOWED_ORIGIN = Deno.env.get('SITE_URL') ?? '*';
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+  "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
+  "Access-Control-Allow-Methods": "GET, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
+
+const ALLOWED_ENDPOINT_PREFIXES = [
+  '/search/multi',
+  '/trending/',
+  '/movie/',
+  '/tv/',
+  '/person/',
+  '/discover/movie',
+  '/discover/tv',
+  '/genre/',
+];
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -26,10 +38,18 @@ Deno.serve(async (req: Request) => {
         JSON.stringify({ error: "Missing endpoint parameter" }),
         {
           status: 400,
-          headers: {
-            ...corsHeaders,
-            "Content-Type": "application/json",
-          },
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    const isAllowed = ALLOWED_ENDPOINT_PREFIXES.some(prefix => endpoint.startsWith(prefix));
+    if (!isAllowed) {
+      return new Response(
+        JSON.stringify({ error: "Endpoint not allowed" }),
+        {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
     }
@@ -39,10 +59,7 @@ Deno.serve(async (req: Request) => {
         JSON.stringify({ error: "TMDB API key not configured" }),
         {
           status: 500,
-          headers: {
-            ...corsHeaders,
-            "Content-Type": "application/json",
-          },
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
     }
@@ -53,34 +70,23 @@ Deno.serve(async (req: Request) => {
     const tmdbUrl = `${TMDB_BASE_URL}${endpoint}?${url.searchParams.toString()}`;
 
     const response = await fetch(tmdbUrl, {
-      method: req.method,
-      headers: {
-        "Content-Type": "application/json",
-      },
+      method: "GET",
+      headers: { "Content-Type": "application/json" },
     });
 
     const data = await response.json();
 
     return new Response(JSON.stringify(data), {
       status: response.status,
-      headers: {
-        ...corsHeaders,
-        "Content-Type": "application/json",
-      },
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
     console.error("Edge function error:", error);
     return new Response(
-      JSON.stringify({
-        error: error.message,
-        details: "Check edge function logs for more information"
-      }),
+      JSON.stringify({ error: error.message }),
       {
         status: 500,
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json",
-        },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );
   }

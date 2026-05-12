@@ -131,7 +131,7 @@ export interface TVCredit {
 
 export interface PersonCredits {
   cast: Array<MovieCredit | TVCredit>;
-  crew: Array<any>;
+  crew: CrewMember[];
 }
 
 async function tmdbFetch(endpoint: string, params: Record<string, string> = {}, retries = 0, cacheTTL?: number): Promise<any> {

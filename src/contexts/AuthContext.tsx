@@ -183,10 +183,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!user) return { error: new Error('Not authenticated') };
 
     try {
-      const updateData: any = updates;
       const { error } = await supabase
         .from('profiles')
-        .update(updateData)
+        .update(updates)
         .eq('id', user.id);
 
       if (error) throw error;

@@ -8,7 +8,6 @@ import { tmdbService } from '../services/tmdb';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
-import { trackInteraction } from '../services/interactions';
 import { preferencesService } from '../services/preferences';
 import { plexService } from '../services/plex';
 import type { PlexAvailability, PlexRequest } from '../services/plex';
@@ -75,22 +74,6 @@ export default function DetailPage() {
         setWatchlistItem(watchlistData.data);
         setPreference(preferenceData);
 
-        await trackInteraction(
-          user.id,
-          parseInt(id),
-          mediaType,
-          'viewed_detail',
-          {
-            genre_ids: detailsData.genres?.map((g: any) => g.id),
-            cast: creditsData.cast.slice(0, 10).map((c: CastMember) => c.name),
-            release_year: 'release_date' in detailsData
-              ? new Date(detailsData.release_date).getFullYear()
-              : undefined,
-            first_air_year: 'first_air_date' in detailsData
-              ? new Date(detailsData.first_air_date).getFullYear()
-              : undefined
-          }
-        );
       } catch (error) {
         console.error('Error loading details:', error);
       } finally {
@@ -213,9 +196,6 @@ export default function DetailPage() {
         if (error) throw error;
         setWatchlistItem(data);
 
-        if (status === 'completed') {
-          await trackInteraction(user.id, parseInt(id), mediaType, 'completed');
-        }
       } else {
         const itemTitle = details ? ('title' in details ? details.title : details.name) : undefined;
         const itemPosterPath = details?.poster_path || undefined;
@@ -248,10 +228,6 @@ export default function DetailPage() {
         if (error) throw error;
         setWatchlistItem(data);
 
-        await trackInteraction(user.id, parseInt(id), mediaType, 'added_to_watchlist');
-        if (status === 'completed') {
-          await trackInteraction(user.id, parseInt(id), mediaType, 'completed');
-        }
       }
     } catch (error) {
       console.error('Error updating watchlist:', error);

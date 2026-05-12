@@ -56,6 +56,9 @@ export interface Database {
           status: 'watching' | 'completed' | 'plan_to_watch' | 'dropped'
           rating: number | null
           notes: string
+          title: string | null
+          poster_path: string | null
+          media_year: number | null
           started_at: string | null
           completed_at: string | null
           created_at: string
@@ -69,6 +72,9 @@ export interface Database {
           status?: 'watching' | 'completed' | 'plan_to_watch' | 'dropped'
           rating?: number | null
           notes?: string
+          title?: string | null
+          poster_path?: string | null
+          media_year?: number | null
           started_at?: string | null
           completed_at?: string | null
           created_at?: string
@@ -82,6 +88,9 @@ export interface Database {
           status?: 'watching' | 'completed' | 'plan_to_watch' | 'dropped'
           rating?: number | null
           notes?: string
+          title?: string | null
+          poster_path?: string | null
+          media_year?: number | null
           started_at?: string | null
           completed_at?: string | null
           created_at?: string

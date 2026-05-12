@@ -9,7 +9,6 @@ import { useLongPress } from '../../hooks/useLongPress';
 import { ContextMenu, ContextMenuItem } from '../ui/ContextMenu';
 import { AddToListModal } from '../lists/AddToListModal';
 import { RecommendModal } from '../recommendations/RecommendModal';
-import { trackInteraction } from '../../services/interactions';
 import { preferencesService } from '../../services/preferences';
 import { plexService } from '../../services/plex';
 import type { Movie, TVShow } from '../../services/tmdb';
@@ -23,7 +22,7 @@ interface MediaCardProps {
 
 type WatchlistStatus = 'watching' | 'completed' | 'plan_to_watch' | 'dropped';
 
-export function MediaCard({ item, mediaType, initialPreference }: MediaCardProps) {
+export function MediaCard({ item, mediaType, initialPreference = null }: MediaCardProps) {
   const { user } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
@@ -36,15 +35,12 @@ export function MediaCard({ item, mediaType, initialPreference }: MediaCardProps
   const [swipeOffset, setSwipeOffset] = useState(0);
   const [showAddToListModal, setShowAddToListModal] = useState(false);
   const [showRecommendModal, setShowRecommendModal] = useState(false);
-  const [preference, setPreference] = useState<'like' | 'dislike' | null>(null);
+  const [preference, setPreference] = useState<'like' | 'dislike' | null>(initialPreference);
   const cardRef = useRef<HTMLDivElement>(null);
   const touchStartX = useRef(0);
 
   useEffect(() => {
-    if (initialPreference !== undefined) {
-      setPreference(initialPreference);
-      return;
-    }
+    if (initialPreference !== null) return;
     async function loadPreference() {
       if (!user) return;
       const pref = await preferencesService.getPreference(item.id, mediaType, user.id);
@@ -132,10 +128,12 @@ export function MediaCard({ item, mediaType, initialPreference }: MediaCardProps
           tmdb_id: item.id,
           media_type: mediaType,
           status,
+          title,
+          poster_path: item.poster_path,
+          media_year: typeof year === 'number' ? year : null,
         };
 
         await supabase.from('watchlist_items').insert(newItem);
-        await trackInteraction(user.id, item.id, mediaType, 'added_to_watchlist');
         toast.success(`Added to ${status}`);
       }
 
@@ -291,12 +289,20 @@ export function MediaCard({ item, mediaType, initialPreference }: MediaCardProps
         <Link to={`/details/${mediaType}/${item.id}`} className="block">
           <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-gray-800">
             <img
-              src={imageError ? tmdbService.getImageUrl(null) : tmdbService.getImageUrl(item.poster_path)}
+              src={imageError ? tmdbService.getImageUrl(null) : tmdbService.getImageUrl(item.poster_path, 'w342')}
               alt={title}
               className="w-full h-full object-cover transition-transform group-hover:scale-105"
               loading="lazy"
               onError={() => setImageError(true)}
             />
+            {item.vote_average > 0 && (
+              <div className="absolute bottom-2 left-2 z-10 flex items-center gap-1 bg-black/70 backdrop-blur-sm rounded-full px-2 py-0.5 pointer-events-none">
+                <svg className="w-3 h-3 text-amber-400" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                </svg>
+                <span className="text-xs font-semibold text-white">{item.vote_average.toFixed(1)}</span>
+              </div>
+            )}
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/0 to-black/20 opacity-0 group-hover:opacity-100 transition-opacity">
               <div className="absolute top-2 right-2 flex gap-2">
                 <button

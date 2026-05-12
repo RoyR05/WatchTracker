@@ -401,6 +401,35 @@ export const preferencesService = {
     }
   },
 
+  async getPreferencesForItems(
+    items: Array<{ tmdbId: number; mediaType: MediaType }>,
+    userId: string
+  ): Promise<Map<string, 'like' | 'dislike'>> {
+    const map = new Map<string, 'like' | 'dislike'>();
+    if (items.length === 0) return map;
+
+    try {
+      const { data, error } = await supabase
+        .from('user_preferences')
+        .select('tmdb_id, media_type, preference_type')
+        .eq('user_id', userId)
+        .in('preference_type', ['like', 'dislike'])
+        .in('tmdb_id', items.map(i => i.tmdbId));
+
+      if (error || !data) return map;
+
+      for (const row of data) {
+        if (row.preference_type === 'like' || row.preference_type === 'dislike') {
+          map.set(`${row.tmdb_id}-${row.media_type}`, row.preference_type);
+        }
+      }
+    } catch (error) {
+      console.error('Error batch fetching preferences:', error);
+    }
+
+    return map;
+  },
+
   async getPreferenceStats(): Promise<PreferenceStats> {
     try {
       const preferences = await this.getPreferences();
