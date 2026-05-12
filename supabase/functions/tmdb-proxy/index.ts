@@ -2,13 +2,22 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 const TMDB_API_KEY = Deno.env.get('TMDB_API_KEY') ?? '';
 const TMDB_BASE_URL = "https://api.themoviedb.org/3";
-const ALLOWED_ORIGIN = Deno.env.get('SITE_URL') ?? '*';
+const SITE_URL = Deno.env.get('SITE_URL') ?? '';
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
-  "Access-Control-Allow-Methods": "GET, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
-};
+function getCorsHeaders(req: Request) {
+  const origin = req.headers.get('origin') ?? '';
+  const isAllowed =
+    origin === SITE_URL ||
+    origin.endsWith('.vercel.app') ||
+    origin.startsWith('http://localhost') ||
+    origin.startsWith('http://127.0.0.1');
+  const allowedOrigin = isAllowed ? origin : (SITE_URL || '*');
+  return {
+    "Access-Control-Allow-Origin": allowedOrigin,
+    "Access-Control-Allow-Methods": "GET, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
+  };
+}
 
 const ALLOWED_ENDPOINT_PREFIXES = [
   '/search/multi',
@@ -22,6 +31,8 @@ const ALLOWED_ENDPOINT_PREFIXES = [
 ];
 
 Deno.serve(async (req: Request) => {
+  const corsHeaders = getCorsHeaders(req);
+
   if (req.method === "OPTIONS") {
     return new Response(null, {
       status: 200,
