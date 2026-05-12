@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Layout } from '../components/layout/Layout';
 import { MediaCard } from '../components/media/MediaCard';
 import { HorizontalScrollSection } from '../components/ui/HorizontalScrollSection';
@@ -34,6 +34,7 @@ function WatchlistCard({ item, statusLabel, badgeClass }: {
   statusLabel: string;
   badgeClass: string;
 }) {
+  const queryClient = useQueryClient();
   const [posterPath, setPosterPath] = useState<string | null>(item.poster_path);
   const [title, setTitle] = useState<string | null>(item.title);
 
@@ -56,12 +57,15 @@ function WatchlistCard({ item, statusLabel, badgeClass }: {
         setPosterPath(details.poster_path);
         setTitle(fetchedTitle);
 
-        // Write back so the next page-load is instant
+        // Write back to DB so the next page-load is instant
         await supabase.from('watchlist_items').update({
           poster_path: details.poster_path,
           title: fetchedTitle,
           media_year: year,
         }).eq('id', item.id);
+
+        // Bust the query cache so navigating away and back shows the poster immediately
+        queryClient.invalidateQueries({ queryKey: ['watchlist'] });
       } catch (e) {
         console.error('Failed to fetch poster for watchlist item', item.id, e);
       }
@@ -69,7 +73,7 @@ function WatchlistCard({ item, statusLabel, badgeClass }: {
 
     fetchAndHeal();
     return () => { cancelled = true; };
-  }, [item.id, item.poster_path, item.media_type, item.tmdb_id]);
+  }, [item.id, item.poster_path, item.media_type, item.tmdb_id, queryClient]);
 
   return (
     <Link to={`/details/${item.media_type}/${item.tmdb_id}`} className="relative block group">

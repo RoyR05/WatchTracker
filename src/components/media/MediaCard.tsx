@@ -1,5 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useState, useRef, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { tmdbService } from '../../services/tmdb';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
@@ -26,6 +27,7 @@ export function MediaCard({ item, mediaType, initialPreference = null }: MediaCa
   const { user } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const title = 'title' in item ? item.title : item.name;
   const date = 'release_date' in item ? item.release_date : item.first_air_date;
   const year = date ? new Date(date).getFullYear() : 'N/A';
@@ -136,6 +138,9 @@ export function MediaCard({ item, mediaType, initialPreference = null }: MediaCa
         await supabase.from('watchlist_items').insert(newItem);
         toast.success(`Added to ${status}`);
       }
+
+      // Refresh every watchlist section on the dashboard
+      queryClient.invalidateQueries({ queryKey: ['watchlist', user.id] });
 
       if ('vibrate' in navigator) {
         navigator.vibrate(50);
