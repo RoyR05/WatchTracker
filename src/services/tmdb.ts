@@ -172,7 +172,7 @@ async function tmdbFetch(endpoint: string, params: Record<string, string> = {}, 
 }
 
 export const tmdbService = {
-  getImageUrl: (path: string | null, size: 'w500' | 'w780' | 'original' = 'w500') => {
+  getImageUrl: (path: string | null, size: 'w342' | 'w500' | 'w780' | 'original' = 'w500') => {
     if (!path) {
       return 'data:image/svg+xml;base64,' + btoa(`
         <svg width="500" height="750" viewBox="0 0 500 750" xmlns="http://www.w3.org/2000/svg">

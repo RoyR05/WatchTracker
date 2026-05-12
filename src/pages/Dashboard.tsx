@@ -90,7 +90,7 @@ export default function Dashboard() {
     queryKey: queryKeys.watchlist(user?.id ?? '', 'watching'),
     queryFn: () =>
       supabase.from('watchlist_items').select('*').eq('user_id', user!.id).eq('status', 'watching')
-        .order('updated_at', { ascending: false }).limit(10),
+        .order('updated_at', { ascending: false }).limit(10).then(r => r),
     enabled,
     staleTime: 60 * 1000,
   });
@@ -99,7 +99,7 @@ export default function Dashboard() {
     queryKey: queryKeys.watchlist(user?.id ?? '', 'plan_to_watch'),
     queryFn: () =>
       supabase.from('watchlist_items').select('*').eq('user_id', user!.id).eq('status', 'plan_to_watch')
-        .order('updated_at', { ascending: false }).limit(10),
+        .order('updated_at', { ascending: false }).limit(10).then(r => r),
     enabled,
     staleTime: 60 * 1000,
   });
