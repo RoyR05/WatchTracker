@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Layout } from '../components/layout/Layout';
@@ -28,52 +28,14 @@ interface WatchlistItem {
   media_year: number | null;
 }
 
-/** Renders one watchlist card, fetching + caching the poster if it's missing from the DB row. */
-function WatchlistCard({ item, statusLabel, badgeClass }: {
+/** Pure display card — poster override supplied by Dashboard's sequential backfill. */
+function WatchlistCard({ item, statusLabel, badgeClass, posterOverride }: {
   item: WatchlistItem;
   statusLabel: string;
   badgeClass: string;
+  posterOverride?: string | null;
 }) {
-  const queryClient = useQueryClient();
-  const [posterPath, setPosterPath] = useState<string | null>(item.poster_path);
-  const [title, setTitle] = useState<string | null>(item.title);
-
-  useEffect(() => {
-    if (item.poster_path) return; // already stored — nothing to fetch
-    let cancelled = false;
-
-    async function fetchAndHeal() {
-      try {
-        const details = item.media_type === 'movie'
-          ? await tmdbService.getMovieDetails(item.tmdb_id)
-          : await tmdbService.getTVShowDetails(item.tmdb_id);
-
-        if (cancelled) return;
-
-        const fetchedTitle = 'title' in details ? details.title : (details as any).name;
-        const date = 'release_date' in details ? details.release_date : (details as any).first_air_date;
-        const year = date ? new Date(date).getFullYear() : null;
-
-        setPosterPath(details.poster_path);
-        setTitle(fetchedTitle);
-
-        // Write back to DB so the next page-load is instant
-        await supabase.from('watchlist_items').update({
-          poster_path: details.poster_path,
-          title: fetchedTitle,
-          media_year: year,
-        }).eq('id', item.id);
-
-        // Bust the query cache so navigating away and back shows the poster immediately
-        queryClient.invalidateQueries({ queryKey: ['watchlist'] });
-      } catch (e) {
-        console.error('Failed to fetch poster for watchlist item', item.id, e);
-      }
-    }
-
-    fetchAndHeal();
-    return () => { cancelled = true; };
-  }, [item.id, item.poster_path, item.media_type, item.tmdb_id, queryClient]);
+  const effectivePoster = posterOverride ?? item.poster_path;
 
   return (
     <Link to={`/details/${item.media_type}/${item.tmdb_id}`} className="relative block group">
@@ -82,17 +44,17 @@ function WatchlistCard({ item, statusLabel, badgeClass }: {
       </div>
       <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-gray-800">
         <img
-          src={posterPath
-            ? `https://image.tmdb.org/t/p/w342${posterPath}`
+          src={effectivePoster
+            ? `https://image.tmdb.org/t/p/w342${effectivePoster}`
             : tmdbService.getImageUrl(null)}
-          alt={title ?? ''}
+          alt={item.title ?? ''}
           className="w-full h-full object-cover transition-transform group-hover:scale-105"
           loading="lazy"
         />
       </div>
       <div className="mt-2">
         <h3 className="text-sm font-medium text-white line-clamp-1 group-hover:text-primary-400 transition-colors">
-          {title}
+          {item.title}
         </h3>
         <p className="text-xs text-gray-400 mt-1">{item.media_year}</p>
       </div>
@@ -103,12 +65,16 @@ function WatchlistCard({ item, statusLabel, badgeClass }: {
 export default function Dashboard() {
   const { user } = useAuth();
   const toast = useToast();
+  const queryClient = useQueryClient();
 
   const [timeWindow, setTimeWindow] = useState<'day' | 'week'>('week');
   const [mediaType, setMediaType] = useState<'all' | 'movie' | 'tv'>('all');
   const [englishOnly, setEnglishOnly] = useState(false);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [preferenceMap, setPreferenceMap] = useState<Map<string, 'like' | 'dislike'>>(new Map());
+  // poster overrides populated by sequential backfill (itemId → posterPath)
+  const [posterOverrides, setPosterOverrides] = useState<Map<string, string>>(new Map());
+  const backfilledIds = useRef<Set<string>>(new Set());
 
   // Load settings once, then enable all queries
   useEffect(() => {
@@ -194,6 +160,60 @@ export default function Dashboard() {
     staleTime: 60 * 1000,
   });
 
+  // Sequential poster backfill — one TMDB request at a time so we never rate-limit
+  useEffect(() => {
+    const allItems = [...watchingItems, ...planToWatchItems] as WatchlistItem[];
+    const toFetch = allItems.filter(
+      item => !item.poster_path && !backfilledIds.current.has(item.id)
+    );
+    if (toFetch.length === 0) return;
+
+    let cancelled = false;
+
+    async function runBackfill() {
+      for (const item of toFetch) {
+        if (cancelled) break;
+        backfilledIds.current.add(item.id);
+        try {
+          const details = item.media_type === 'movie'
+            ? await tmdbService.getMovieDetails(item.tmdb_id)
+            : await tmdbService.getTVShowDetails(item.tmdb_id);
+
+          if (cancelled) break;
+
+          const poster = details.poster_path;
+          const fetchedTitle = 'title' in details ? details.title : (details as any).name;
+          const date = 'release_date' in details ? details.release_date : (details as any).first_air_date;
+          const mediaYear = date ? new Date(date).getFullYear() : null;
+
+          // Update display immediately — no need to wait for DB
+          if (poster) {
+            setPosterOverrides(prev => new Map(prev).set(item.id, poster));
+          }
+
+          // Write back to DB so next load is instant
+          await supabase.from('watchlist_items').update({
+            poster_path: poster,
+            title: fetchedTitle,
+            media_year: mediaYear,
+          }).eq('id', item.id);
+
+        } catch (e) {
+          console.error('Poster backfill failed for item', item.id, e);
+          backfilledIds.current.delete(item.id); // allow retry on next render
+        }
+      }
+      // Refresh query cache so navigating away and back loads from DB
+      if (!cancelled) {
+        queryClient.invalidateQueries({ queryKey: ['watchlist', user?.id] });
+      }
+    }
+
+    runBackfill();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchingItems, planToWatchItems]);
+
   // Flatten pages into item arrays
   const trending = useMemo(() => trendingPages?.pages.flatMap(p => p?.results ?? []) ?? [], [trendingPages]);
   const anticipated = useMemo(() => anticipatedPages?.pages.flatMap(p => p?.results ?? []) ?? [], [anticipatedPages]);
@@ -233,7 +253,7 @@ export default function Dashboard() {
       <GestureTutorial />
       <div className="space-y-8">
 
-        {/* Currently Watching — self-heals poster_path if missing */}
+        {/* Currently Watching */}
         <CollapsibleSection id="currently-watching" title="Currently Watching" itemCount={watchingItems.length}>
           {watchingItems.length > 0 ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
@@ -243,6 +263,7 @@ export default function Dashboard() {
                   item={item}
                   statusLabel="Watching"
                   badgeClass="bg-primary-600"
+                  posterOverride={posterOverrides.get(item.id)}
                 />
               ))}
             </div>
@@ -253,7 +274,7 @@ export default function Dashboard() {
           )}
         </CollapsibleSection>
 
-        {/* Plan to Watch — self-heals poster_path if missing */}
+        {/* Plan to Watch */}
         <CollapsibleSection id="plan-to-watch" title="Plan to Watch" itemCount={planToWatchItems.length}>
           {planToWatchItems.length > 0 ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
@@ -263,6 +284,7 @@ export default function Dashboard() {
                   item={item}
                   statusLabel="Plan to Watch"
                   badgeClass="bg-amber-600"
+                  posterOverride={posterOverrides.get(item.id)}
                 />
               ))}
             </div>
