@@ -221,19 +221,22 @@ export function PermissionsPage() {
             <table className="w-full border-collapse">
               <thead>
                 <tr>
-                  <th className="sticky left-0 bg-gray-800 border border-gray-700 px-4 py-2 text-left text-xs font-medium text-gray-300">
+                  <th className="sticky left-0 bg-gray-800 border border-gray-700 px-4 py-3 text-left text-xs font-medium text-gray-300 whitespace-nowrap">
                     User (can share with →)
                   </th>
-                  {users.map((user) => (
-                    <th
-                      key={user.id}
-                      className="border border-gray-700 px-2 py-2 text-xs text-gray-300 min-w-[120px]"
-                    >
-                      <div className="transform -rotate-45 origin-left whitespace-nowrap">
-                        {user.email}
-                      </div>
-                    </th>
-                  ))}
+                  {users.map((user) => {
+                    const label = user.email.split('@')[0];
+                    return (
+                      <th
+                        key={user.id}
+                        className="border border-gray-700 px-2 py-3 text-xs text-gray-300 min-w-[90px] max-w-[110px]"
+                        title={user.email}
+                      >
+                        <div className="truncate text-center">{label}</div>
+                        <div className="truncate text-center text-gray-500 text-[10px]">@{user.email.split('@')[1]}</div>
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody>
