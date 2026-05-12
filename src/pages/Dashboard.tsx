@@ -18,6 +18,84 @@ import { queryKeys } from '../lib/queryKeys';
 import { CacheTTL } from '../services/cache';
 import type { Movie, TVShow } from '../services/tmdb';
 
+interface WatchlistItem {
+  id: string;
+  tmdb_id: number;
+  media_type: string;
+  status: string;
+  title: string | null;
+  poster_path: string | null;
+  media_year: number | null;
+}
+
+/** Renders one watchlist card, fetching + caching the poster if it's missing from the DB row. */
+function WatchlistCard({ item, statusLabel, badgeClass }: {
+  item: WatchlistItem;
+  statusLabel: string;
+  badgeClass: string;
+}) {
+  const [posterPath, setPosterPath] = useState<string | null>(item.poster_path);
+  const [title, setTitle] = useState<string | null>(item.title);
+
+  useEffect(() => {
+    if (item.poster_path) return; // already stored — nothing to fetch
+    let cancelled = false;
+
+    async function fetchAndHeal() {
+      try {
+        const details = item.media_type === 'movie'
+          ? await tmdbService.getMovieDetails(item.tmdb_id)
+          : await tmdbService.getTVShowDetails(item.tmdb_id);
+
+        if (cancelled) return;
+
+        const fetchedTitle = 'title' in details ? details.title : (details as any).name;
+        const date = 'release_date' in details ? details.release_date : (details as any).first_air_date;
+        const year = date ? new Date(date).getFullYear() : null;
+
+        setPosterPath(details.poster_path);
+        setTitle(fetchedTitle);
+
+        // Write back so the next page-load is instant
+        await supabase.from('watchlist_items').update({
+          poster_path: details.poster_path,
+          title: fetchedTitle,
+          media_year: year,
+        }).eq('id', item.id);
+      } catch (e) {
+        console.error('Failed to fetch poster for watchlist item', item.id, e);
+      }
+    }
+
+    fetchAndHeal();
+    return () => { cancelled = true; };
+  }, [item.id, item.poster_path, item.media_type, item.tmdb_id]);
+
+  return (
+    <Link to={`/details/${item.media_type}/${item.tmdb_id}`} className="relative block group">
+      <div className={`absolute top-2 right-2 z-10 ${badgeClass} text-white text-xs px-2 py-1 rounded`}>
+        {statusLabel}
+      </div>
+      <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-gray-800">
+        <img
+          src={posterPath
+            ? `https://image.tmdb.org/t/p/w342${posterPath}`
+            : tmdbService.getImageUrl(null)}
+          alt={title ?? ''}
+          className="w-full h-full object-cover transition-transform group-hover:scale-105"
+          loading="lazy"
+        />
+      </div>
+      <div className="mt-2">
+        <h3 className="text-sm font-medium text-white line-clamp-1 group-hover:text-primary-400 transition-colors">
+          {title}
+        </h3>
+        <p className="text-xs text-gray-400 mt-1">{item.media_year}</p>
+      </div>
+    </Link>
+  );
+}
+
 export default function Dashboard() {
   const { user } = useAuth();
   const toast = useToast();
@@ -151,28 +229,17 @@ export default function Dashboard() {
       <GestureTutorial />
       <div className="space-y-8">
 
-        {/* Currently Watching — from DB metadata, zero TMDB calls */}
+        {/* Currently Watching — self-heals poster_path if missing */}
         <CollapsibleSection id="currently-watching" title="Currently Watching" itemCount={watchingItems.length}>
           {watchingItems.length > 0 ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
               {watchingItems.map(item => (
-                <Link key={item.id} to={`/details/${item.media_type}/${item.tmdb_id}`} className="relative block group">
-                  <div className="absolute top-2 right-2 z-10 bg-primary-600 text-white text-xs px-2 py-1 rounded">
-                    Watching
-                  </div>
-                  <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-gray-800">
-                    <img
-                      src={item.poster_path ? `https://image.tmdb.org/t/p/w342${item.poster_path}` : tmdbService.getImageUrl(null)}
-                      alt={item.title ?? ''}
-                      className="w-full h-full object-cover transition-transform group-hover:scale-105"
-                      loading="lazy"
-                    />
-                  </div>
-                  <div className="mt-2">
-                    <h3 className="text-sm font-medium text-white line-clamp-1 group-hover:text-primary-400 transition-colors">{item.title}</h3>
-                    <p className="text-xs text-gray-400 mt-1">{item.media_year}</p>
-                  </div>
-                </Link>
+                <WatchlistCard
+                  key={item.id}
+                  item={item}
+                  statusLabel="Watching"
+                  badgeClass="bg-primary-600"
+                />
               ))}
             </div>
           ) : (
@@ -182,28 +249,17 @@ export default function Dashboard() {
           )}
         </CollapsibleSection>
 
-        {/* Plan to Watch — from DB metadata, zero TMDB calls */}
+        {/* Plan to Watch — self-heals poster_path if missing */}
         <CollapsibleSection id="plan-to-watch" title="Plan to Watch" itemCount={planToWatchItems.length}>
           {planToWatchItems.length > 0 ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
               {planToWatchItems.map(item => (
-                <Link key={item.id} to={`/details/${item.media_type}/${item.tmdb_id}`} className="relative block group">
-                  <div className="absolute top-2 right-2 z-10 bg-amber-600 text-white text-xs px-2 py-1 rounded">
-                    Plan to Watch
-                  </div>
-                  <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-gray-800">
-                    <img
-                      src={item.poster_path ? `https://image.tmdb.org/t/p/w342${item.poster_path}` : tmdbService.getImageUrl(null)}
-                      alt={item.title ?? ''}
-                      className="w-full h-full object-cover transition-transform group-hover:scale-105"
-                      loading="lazy"
-                    />
-                  </div>
-                  <div className="mt-2">
-                    <h3 className="text-sm font-medium text-white line-clamp-1 group-hover:text-primary-400 transition-colors">{item.title}</h3>
-                    <p className="text-xs text-gray-400 mt-1">{item.media_year}</p>
-                  </div>
-                </Link>
+                <WatchlistCard
+                  key={item.id}
+                  item={item}
+                  statusLabel="Plan to Watch"
+                  badgeClass="bg-amber-600"
+                />
               ))}
             </div>
           ) : (
