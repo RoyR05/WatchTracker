@@ -86,26 +86,31 @@ export default function Dashboard() {
   });
 
   // --- Watchlist queries (reads from DB metadata — no TMDB calls) ---
-  const { data: watchingData } = useQuery({
+  const { data: watchingItems = [] } = useQuery({
     queryKey: queryKeys.watchlist(user?.id ?? '', 'watching'),
-    queryFn: () =>
-      supabase.from('watchlist_items').select('*').eq('user_id', user!.id).eq('status', 'watching')
-        .order('updated_at', { ascending: false }).limit(10).then(r => r),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('watchlist_items').select('*').eq('user_id', user!.id).eq('status', 'watching')
+        .order('updated_at', { ascending: false }).limit(10);
+      if (error) throw error;
+      return data ?? [];
+    },
     enabled,
     staleTime: 60 * 1000,
   });
 
-  const { data: planData } = useQuery({
+  const { data: planToWatchItems = [] } = useQuery({
     queryKey: queryKeys.watchlist(user?.id ?? '', 'plan_to_watch'),
-    queryFn: () =>
-      supabase.from('watchlist_items').select('*').eq('user_id', user!.id).eq('status', 'plan_to_watch')
-        .order('updated_at', { ascending: false }).limit(10).then(r => r),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('watchlist_items').select('*').eq('user_id', user!.id).eq('status', 'plan_to_watch')
+        .order('updated_at', { ascending: false }).limit(10);
+      if (error) throw error;
+      return data ?? [];
+    },
     enabled,
     staleTime: 60 * 1000,
   });
-
-  const watchingItems = watchingData?.data ?? [];
-  const planToWatchItems = planData?.data ?? [];
 
   // Flatten pages into item arrays
   const trending = useMemo(() => trendingPages?.pages.flatMap(p => p?.results ?? []) ?? [], [trendingPages]);
