@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { Layout } from '../components/layout/Layout';
 import { MediaCard } from '../components/media/MediaCard';
 import { SkeletonGrid } from '../components/ui/Skeleton';
@@ -10,34 +11,15 @@ import { tmdbService } from '../services/tmdb';
 import { userSettingsService } from '../services/userSettings';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { queryKeys } from '../lib/queryKeys';
 import type { Movie, TVShow, MovieDetails, TVShowDetails } from '../services/tmdb';
-import type { Database } from '../types/database.types';
-
-type WatchlistItem = Database['public']['Tables']['watchlist_items']['Row'];
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const [trending, setTrending] = useState<Array<Movie | TVShow>>([]);
-  const [anticipated, setAnticipated] = useState<Array<Movie | TVShow>>([]);
-  const [popular, setPopular] = useState<Array<Movie | TVShow>>([]);
-  const [watchingMedia, setWatchingMedia] = useState<Array<{ media: MovieDetails | TVShowDetails; mediaType: 'movie' | 'tv' }>>([]);
-  const [planToWatchMedia, setPlanToWatchMedia] = useState<Array<{ media: MovieDetails | TVShowDetails; mediaType: 'movie' | 'tv' }>>([]);
-  const [loading, setLoading] = useState(true);
   const [timeWindow, setTimeWindow] = useState<'day' | 'week'>('week');
   const [mediaType, setMediaType] = useState<'all' | 'movie' | 'tv'>('all');
   const [englishOnly, setEnglishOnly] = useState(false);
-  const [loadingTrending, setLoadingTrending] = useState(false);
-  const [loadingAnticipated, setLoadingAnticipated] = useState(false);
-  const [loadingPopular, setLoadingPopular] = useState(false);
-  const [trendingPage, setTrendingPage] = useState(1);
-  const [anticipatedPage, setAnticipatedPage] = useState(1);
-  const [popularPage, setPopularPage] = useState(1);
-  const [hasMoreTrending, setHasMoreTrending] = useState(true);
-  const [hasMoreAnticipated, setHasMoreAnticipated] = useState(true);
-  const [hasMorePopular, setHasMorePopular] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [loadingMoreAnticipated, setLoadingMoreAnticipated] = useState(false);
-  const [loadingMorePopular, setLoadingMorePopular] = useState(false);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const anticipatedScrollRef = useRef<HTMLDivElement>(null);
   const popularScrollRef = useRef<HTMLDivElement>(null);
@@ -49,286 +31,145 @@ export default function Dashboard() {
   const [canScrollRightPopular, setCanScrollRightPopular] = useState(true);
   const toast = useToast();
 
-  const loadMoreTrending = useCallback(async () => {
-    if (loadingMore || !hasMoreTrending) return;
-
-    setLoadingMore(true);
-    try {
-      const nextPage = trendingPage + 1;
-      const trendingData = await tmdbService.getTrending(mediaType, timeWindow, nextPage, englishOnly);
-
-      if (trendingData && trendingData.results && trendingData.results.length > 0) {
-        setTrending(prev => [...prev, ...trendingData.results]);
-        setTrendingPage(nextPage);
-
-        if (nextPage >= trendingData.total_pages || trendingData.results.length === 0) {
-          setHasMoreTrending(false);
-        }
-      } else {
-        setHasMoreTrending(false);
-      }
-    } catch (error) {
-      console.error('Error loading more trending:', error);
-    } finally {
-      setLoadingMore(false);
-    }
-  }, [loadingMore, hasMoreTrending, trendingPage, timeWindow, mediaType, englishOnly]);
-
-  const loadMoreAnticipated = useCallback(async () => {
-    if (loadingMoreAnticipated || !hasMoreAnticipated) return;
-
-    setLoadingMoreAnticipated(true);
-    try {
-      const nextPage = anticipatedPage + 1;
-      const data = await tmdbService.getAnticipated(mediaType, nextPage, englishOnly);
-
-      if (data && data.results && data.results.length > 0) {
-        setAnticipated(prev => [...prev, ...data.results]);
-        setAnticipatedPage(nextPage);
-
-        if (nextPage >= data.total_pages || data.results.length === 0) {
-          setHasMoreAnticipated(false);
-        }
-      } else {
-        setHasMoreAnticipated(false);
-      }
-    } catch (error) {
-      console.error('Error loading more anticipated:', error);
-    } finally {
-      setLoadingMoreAnticipated(false);
-    }
-  }, [loadingMoreAnticipated, hasMoreAnticipated, anticipatedPage, mediaType, englishOnly]);
-
-  const loadMorePopular = useCallback(async () => {
-    if (loadingMorePopular || !hasMorePopular) return;
-
-    setLoadingMorePopular(true);
-    try {
-      const nextPage = popularPage + 1;
-      const data = await tmdbService.getPopular(mediaType, nextPage, englishOnly);
-
-      if (data && data.results && data.results.length > 0) {
-        setPopular(prev => [...prev, ...data.results]);
-        setPopularPage(nextPage);
-
-        if (nextPage >= data.total_pages || data.results.length === 0) {
-          setHasMorePopular(false);
-        }
-      } else {
-        setHasMorePopular(false);
-      }
-    } catch (error) {
-      console.error('Error loading more popular:', error);
-    } finally {
-      setLoadingMorePopular(false);
-    }
-  }, [loadingMorePopular, hasMorePopular, popularPage, mediaType, englishOnly]);
-
   useEffect(() => {
     async function loadUserSettings() {
       if (!user) return;
       const savedEnglishOnly = await userSettingsService.getEnglishOnlyFilter();
       setEnglishOnly(savedEnglishOnly);
+      setSettingsLoaded(true);
     }
-
     loadUserSettings();
   }, [user]);
 
-  useEffect(() => {
-    async function loadDashboard() {
-      if (!user) return;
+  const trendingQuery = useInfiniteQuery({
+    queryKey: queryKeys.trending(mediaType, timeWindow, englishOnly),
+    queryFn: ({ pageParam = 1 }) => tmdbService.getTrending(mediaType, timeWindow, pageParam, englishOnly),
+    getNextPageParam: (lastPage, allPages) => {
+      if (!lastPage || allPages.length >= lastPage.total_pages) return undefined;
+      return allPages.length + 1;
+    },
+    initialPageParam: 1,
+    staleTime: 5 * 60 * 1000,
+    enabled: !!user && settingsLoaded,
+  });
 
-      try {
-        const trendingPromise = tmdbService.getTrending(mediaType, timeWindow, 1, englishOnly);
-        const anticipatedPromise = tmdbService.getAnticipated(mediaType, 1, englishOnly);
-        const popularPromise = tmdbService.getPopular(mediaType, 1, englishOnly);
-        const watchlistPromise = supabase
-          .from('watchlist_items')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('status', 'watching')
-          .order('updated_at', { ascending: false })
-          .limit(10);
+  const anticipatedQuery = useInfiniteQuery({
+    queryKey: queryKeys.anticipated(mediaType, englishOnly),
+    queryFn: ({ pageParam = 1 }) => tmdbService.getAnticipated(mediaType, pageParam, englishOnly),
+    getNextPageParam: (lastPage, allPages) => {
+      if (!lastPage || allPages.length >= lastPage.total_pages) return undefined;
+      return allPages.length + 1;
+    },
+    initialPageParam: 1,
+    staleTime: 5 * 60 * 1000,
+    enabled: !!user && settingsLoaded,
+  });
 
-        const planToWatchPromise = supabase
-          .from('watchlist_items')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('status', 'plan_to_watch')
-          .order('updated_at', { ascending: false })
-          .limit(10);
+  const popularQuery = useInfiniteQuery({
+    queryKey: queryKeys.popular(mediaType, englishOnly),
+    queryFn: ({ pageParam = 1 }) => tmdbService.getPopular(mediaType, pageParam, englishOnly),
+    getNextPageParam: (lastPage, allPages) => {
+      if (!lastPage || allPages.length >= lastPage.total_pages) return undefined;
+      return allPages.length + 1;
+    },
+    initialPageParam: 1,
+    staleTime: 5 * 60 * 1000,
+    enabled: !!user && settingsLoaded,
+  });
 
-        const [trendingData, anticipatedData, popularData, watchlistData, planToWatchData] = await Promise.all([
-          trendingPromise,
-          anticipatedPromise,
-          popularPromise,
-          watchlistPromise,
-          planToWatchPromise
-        ]);
+  const watchingQuery = useQuery({
+    queryKey: queryKeys.watchlist(user?.id || '', 'watching'),
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('watchlist_items')
+        .select('*')
+        .eq('user_id', user!.id)
+        .eq('status', 'watching')
+        .order('updated_at', { ascending: false })
+        .limit(10);
 
-        if (trendingData && trendingData.results) {
-          setTrending(trendingData.results);
-          setTrendingPage(1);
-          setHasMoreTrending(trendingData.total_pages > 1);
-        }
+      if (!data || data.length === 0) return [];
 
-        if (anticipatedData && anticipatedData.results) {
-          setAnticipated(anticipatedData.results);
-          setAnticipatedPage(1);
-          setHasMoreAnticipated(anticipatedData.total_pages > 1);
-        }
+      const mediaDetails = await Promise.all(
+        data.map(async (item) => {
+          try {
+            const details = item.media_type === 'movie'
+              ? await tmdbService.getMovieDetails(item.tmdb_id)
+              : await tmdbService.getTVShowDetails(item.tmdb_id);
+            return { media: details, mediaType: item.media_type as 'movie' | 'tv' };
+          } catch {
+            return null;
+          }
+        })
+      );
+      return mediaDetails.filter((item): item is { media: MovieDetails | TVShowDetails; mediaType: 'movie' | 'tv' } => item !== null);
+    },
+    staleTime: 5 * 60 * 1000,
+    enabled: !!user,
+  });
 
-        if (popularData && popularData.results) {
-          setPopular(popularData.results);
-          setPopularPage(1);
-          setHasMorePopular(popularData.total_pages > 1);
-        }
+  const planToWatchQuery = useQuery({
+    queryKey: queryKeys.watchlist(user?.id || '', 'plan_to_watch'),
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('watchlist_items')
+        .select('*')
+        .eq('user_id', user!.id)
+        .eq('status', 'plan_to_watch')
+        .order('updated_at', { ascending: false })
+        .limit(10);
 
-        if (watchlistData.data && watchlistData.data.length > 0) {
-          const mediaDetails = await Promise.all(
-            watchlistData.data.map(async (item) => {
-              try {
-                const details = item.media_type === 'movie'
-                  ? await tmdbService.getMovieDetails(item.tmdb_id)
-                  : await tmdbService.getTVShowDetails(item.tmdb_id);
-                return { media: details, mediaType: item.media_type };
-              } catch (error) {
-                console.error(`Error loading details for ${item.media_type} ${item.tmdb_id}:`, error);
-                return null;
-              }
-            })
-          );
-          setWatchingMedia(mediaDetails.filter((item): item is { media: MovieDetails | TVShowDetails; mediaType: 'movie' | 'tv' } => item !== null));
-        }
+      if (!data || data.length === 0) return [];
 
-        if (planToWatchData.data && planToWatchData.data.length > 0) {
-          const mediaDetails = await Promise.all(
-            planToWatchData.data.map(async (item) => {
-              try {
-                const details = item.media_type === 'movie'
-                  ? await tmdbService.getMovieDetails(item.tmdb_id)
-                  : await tmdbService.getTVShowDetails(item.tmdb_id);
-                return { media: details, mediaType: item.media_type };
-              } catch (error) {
-                console.error(`Error loading details for ${item.media_type} ${item.tmdb_id}:`, error);
-                return null;
-              }
-            })
-          );
-          setPlanToWatchMedia(mediaDetails.filter((item): item is { media: MovieDetails | TVShowDetails; mediaType: 'movie' | 'tv' } => item !== null));
-        }
-      } catch (error) {
-        console.error('Error loading dashboard:', error);
-        toast.error(error instanceof Error ? error.message : 'Failed to load dashboard');
-      } finally {
-        setLoading(false);
-      }
-    }
+      const mediaDetails = await Promise.all(
+        data.map(async (item) => {
+          try {
+            const details = item.media_type === 'movie'
+              ? await tmdbService.getMovieDetails(item.tmdb_id)
+              : await tmdbService.getTVShowDetails(item.tmdb_id);
+            return { media: details, mediaType: item.media_type as 'movie' | 'tv' };
+          } catch {
+            return null;
+          }
+        })
+      );
+      return mediaDetails.filter((item): item is { media: MovieDetails | TVShowDetails; mediaType: 'movie' | 'tv' } => item !== null);
+    },
+    staleTime: 5 * 60 * 1000,
+    enabled: !!user,
+  });
 
-    if (user) {
-      loadDashboard();
-    } else {
-      setLoading(false);
-    }
-  }, [user, englishOnly]);
+  const trending = trendingQuery.data?.pages.flatMap(p => p?.results || []) || [];
+  const anticipated = anticipatedQuery.data?.pages.flatMap(p => p?.results || []) || [];
+  const popular = popularQuery.data?.pages.flatMap(p => p?.results || []) || [];
+  const watchingMedia = watchingQuery.data || [];
+  const planToWatchMedia = planToWatchQuery.data || [];
 
-  useEffect(() => {
-    async function loadTrending() {
-      if (!user) return;
-      setLoadingTrending(true);
-      setTrendingPage(1);
-      setHasMoreTrending(true);
-      try {
-        const trendingData = await tmdbService.getTrending(mediaType, timeWindow, 1, englishOnly);
-        if (trendingData && trendingData.results) {
-          setTrending(trendingData.results);
-          setHasMoreTrending(trendingData.total_pages > 1);
-        }
-      } catch (error) {
-        console.error('Error loading trending:', error);
-      } finally {
-        setLoadingTrending(false);
-      }
-    }
-
-    loadTrending();
-  }, [timeWindow, mediaType]);
-
-  useEffect(() => {
-    async function loadAnticipated() {
-      setLoadingAnticipated(true);
-      setAnticipatedPage(1);
-      setHasMoreAnticipated(true);
-      try {
-        const data = await tmdbService.getAnticipated(mediaType, 1, englishOnly);
-        if (data && data.results) {
-          setAnticipated(data.results);
-          setHasMoreAnticipated(data.total_pages > 1);
-        }
-      } catch (error) {
-        console.error('Error loading anticipated:', error);
-      } finally {
-        setLoadingAnticipated(false);
-      }
-    }
-
-    if (user) {
-      loadAnticipated();
-    }
-  }, [mediaType, user]);
-
-  useEffect(() => {
-    async function loadPopular() {
-      setLoadingPopular(true);
-      setPopularPage(1);
-      setHasMorePopular(true);
-      try {
-        const data = await tmdbService.getPopular(mediaType, 1, englishOnly);
-        if (data && data.results) {
-          setPopular(data.results);
-          setHasMorePopular(data.total_pages > 1);
-        }
-      } catch (error) {
-        console.error('Error loading popular:', error);
-      } finally {
-        setLoadingPopular(false);
-      }
-    }
-
-    if (user) {
-      loadPopular();
-    }
-  }, [mediaType, user]);
+  const loading = !settingsLoaded || (trendingQuery.isLoading && watchingQuery.isLoading);
 
   const updateScrollButtons = useCallback(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
-
     const { scrollLeft, scrollWidth, clientWidth } = container;
     setCanScrollLeft(scrollLeft > 0);
     setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 10);
   }, []);
 
-  const scrollLeft = () => {
+  const scrollLeftFn = () => {
     const container = scrollContainerRef.current;
     if (!container) return;
-
-    const scrollAmount = container.clientWidth * 0.8;
-    container.scrollBy({ left: -scrollAmount, behavior: 'smooth' });
+    container.scrollBy({ left: -(container.clientWidth * 0.8), behavior: 'smooth' });
   };
 
-  const scrollRight = () => {
+  const scrollRightFn = () => {
     const container = scrollContainerRef.current;
     if (!container) return;
-
-    const scrollAmount = container.clientWidth * 0.8;
-    container.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+    container.scrollBy({ left: container.clientWidth * 0.8, behavior: 'smooth' });
   };
 
   const updateScrollButtonsAnticipated = useCallback(() => {
     const container = anticipatedScrollRef.current;
     if (!container) return;
-
     const { scrollLeft, scrollWidth, clientWidth } = container;
     setCanScrollLeftAnticipated(scrollLeft > 0);
     setCanScrollRightAnticipated(scrollLeft < scrollWidth - clientWidth - 10);
@@ -337,23 +178,18 @@ export default function Dashboard() {
   const scrollLeftAnticipated = () => {
     const container = anticipatedScrollRef.current;
     if (!container) return;
-
-    const scrollAmount = container.clientWidth * 0.8;
-    container.scrollBy({ left: -scrollAmount, behavior: 'smooth' });
+    container.scrollBy({ left: -(container.clientWidth * 0.8), behavior: 'smooth' });
   };
 
   const scrollRightAnticipated = () => {
     const container = anticipatedScrollRef.current;
     if (!container) return;
-
-    const scrollAmount = container.clientWidth * 0.8;
-    container.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+    container.scrollBy({ left: container.clientWidth * 0.8, behavior: 'smooth' });
   };
 
   const updateScrollButtonsPopular = useCallback(() => {
     const container = popularScrollRef.current;
     if (!container) return;
-
     const { scrollLeft, scrollWidth, clientWidth } = container;
     setCanScrollLeftPopular(scrollLeft > 0);
     setCanScrollRightPopular(scrollLeft < scrollWidth - clientWidth - 10);
@@ -362,17 +198,13 @@ export default function Dashboard() {
   const scrollLeftPopular = () => {
     const container = popularScrollRef.current;
     if (!container) return;
-
-    const scrollAmount = container.clientWidth * 0.8;
-    container.scrollBy({ left: -scrollAmount, behavior: 'smooth' });
+    container.scrollBy({ left: -(container.clientWidth * 0.8), behavior: 'smooth' });
   };
 
   const scrollRightPopular = () => {
     const container = popularScrollRef.current;
     if (!container) return;
-
-    const scrollAmount = container.clientWidth * 0.8;
-    container.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+    container.scrollBy({ left: container.clientWidth * 0.8, behavior: 'smooth' });
   };
 
   useEffect(() => {
@@ -382,24 +214,20 @@ export default function Dashboard() {
     const handleScroll = () => {
       const { scrollLeft, scrollWidth, clientWidth } = container;
       const scrollPercentage = (scrollLeft + clientWidth) / scrollWidth;
-
       setCanScrollLeft(scrollLeft > 0);
       setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 10);
 
-      if (scrollPercentage > 0.8 && hasMoreTrending && !loadingMore) {
-        loadMoreTrending();
+      if (scrollPercentage > 0.8 && trendingQuery.hasNextPage && !trendingQuery.isFetchingNextPage) {
+        trendingQuery.fetchNextPage();
       }
     };
 
     container.addEventListener('scroll', handleScroll);
     updateScrollButtons();
-
     return () => container.removeEventListener('scroll', handleScroll);
-  }, [hasMoreTrending, loadingMore, loadMoreTrending, updateScrollButtons]);
+  }, [trendingQuery.hasNextPage, trendingQuery.isFetchingNextPage, updateScrollButtons]);
 
-  useEffect(() => {
-    updateScrollButtons();
-  }, [trending, updateScrollButtons]);
+  useEffect(() => { updateScrollButtons(); }, [trending, updateScrollButtons]);
 
   useEffect(() => {
     const container = anticipatedScrollRef.current;
@@ -408,24 +236,20 @@ export default function Dashboard() {
     const handleScroll = () => {
       const { scrollLeft, scrollWidth, clientWidth } = container;
       const scrollPercentage = (scrollLeft + clientWidth) / scrollWidth;
-
       setCanScrollLeftAnticipated(scrollLeft > 0);
       setCanScrollRightAnticipated(scrollLeft < scrollWidth - clientWidth - 10);
 
-      if (scrollPercentage > 0.8 && hasMoreAnticipated && !loadingMoreAnticipated) {
-        loadMoreAnticipated();
+      if (scrollPercentage > 0.8 && anticipatedQuery.hasNextPage && !anticipatedQuery.isFetchingNextPage) {
+        anticipatedQuery.fetchNextPage();
       }
     };
 
     container.addEventListener('scroll', handleScroll);
     updateScrollButtonsAnticipated();
-
     return () => container.removeEventListener('scroll', handleScroll);
-  }, [hasMoreAnticipated, loadingMoreAnticipated, loadMoreAnticipated, updateScrollButtonsAnticipated]);
+  }, [anticipatedQuery.hasNextPage, anticipatedQuery.isFetchingNextPage, updateScrollButtonsAnticipated]);
 
-  useEffect(() => {
-    updateScrollButtonsAnticipated();
-  }, [anticipated, updateScrollButtonsAnticipated]);
+  useEffect(() => { updateScrollButtonsAnticipated(); }, [anticipated, updateScrollButtonsAnticipated]);
 
   useEffect(() => {
     const container = popularScrollRef.current;
@@ -434,24 +258,20 @@ export default function Dashboard() {
     const handleScroll = () => {
       const { scrollLeft, scrollWidth, clientWidth } = container;
       const scrollPercentage = (scrollLeft + clientWidth) / scrollWidth;
-
       setCanScrollLeftPopular(scrollLeft > 0);
       setCanScrollRightPopular(scrollLeft < scrollWidth - clientWidth - 10);
 
-      if (scrollPercentage > 0.8 && hasMorePopular && !loadingMorePopular) {
-        loadMorePopular();
+      if (scrollPercentage > 0.8 && popularQuery.hasNextPage && !popularQuery.isFetchingNextPage) {
+        popularQuery.fetchNextPage();
       }
     };
 
     container.addEventListener('scroll', handleScroll);
     updateScrollButtonsPopular();
-
     return () => container.removeEventListener('scroll', handleScroll);
-  }, [hasMorePopular, loadingMorePopular, loadMorePopular, updateScrollButtonsPopular]);
+  }, [popularQuery.hasNextPage, popularQuery.isFetchingNextPage, updateScrollButtonsPopular]);
 
-  useEffect(() => {
-    updateScrollButtonsPopular();
-  }, [popular, updateScrollButtonsPopular]);
+  useEffect(() => { updateScrollButtonsPopular(); }, [popular, updateScrollButtonsPopular]);
 
   if (loading) {
     return (
@@ -589,11 +409,9 @@ export default function Dashboard() {
           title="Trending"
           itemCount={trending.length}
         >
-
-          {/* Desktop Navigation Arrows */}
           <div className="hidden md:flex items-center gap-2 mb-4">
             <button
-              onClick={scrollLeft}
+              onClick={scrollLeftFn}
               disabled={!canScrollLeft}
               className={`p-2 rounded-lg bg-gray-800 border border-gray-700 transition-all duration-200 ${
                 canScrollLeft
@@ -607,7 +425,7 @@ export default function Dashboard() {
               </svg>
             </button>
             <button
-              onClick={scrollRight}
+              onClick={scrollRightFn}
               disabled={!canScrollRight}
               className={`p-2 rounded-lg bg-gray-800 border border-gray-700 transition-all duration-200 ${
                 canScrollRight
@@ -624,7 +442,7 @@ export default function Dashboard() {
               {canScrollRight ? 'Scroll to see more' : 'End of trending'}
             </span>
           </div>
-          {loadingTrending ? (
+          {trendingQuery.isLoading ? (
             <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
               {Array.from({ length: 10 }).map((_, i) => (
                 <div key={i} className="flex-shrink-0 w-40 sm:w-48">
@@ -645,26 +463,25 @@ export default function Dashboard() {
                   />
                 </div>
               ))}
-              {(hasMoreTrending || trendingPage === 1) && !loadingMore && (
+              {trendingQuery.hasNextPage && !trendingQuery.isFetchingNextPage && (
                 <div className="flex-shrink-0 w-40 sm:w-48 flex items-center justify-center">
                   <button
-                    onClick={loadMoreTrending}
+                    onClick={() => trendingQuery.fetchNextPage()}
                     className="w-full h-full min-h-[240px] bg-gradient-to-br from-gray-800 to-gray-900 hover:from-gray-700 hover:to-gray-800 text-white rounded-lg border-2 border-dashed border-gray-600 hover:border-primary-500 transition-all duration-200 flex flex-col items-center justify-center gap-3 shadow-lg"
                   >
                     <svg className="w-10 h-10 text-primary-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                     </svg>
                     <span className="text-base font-semibold">Load More</span>
-                    <span className="text-xs text-gray-400">Page {trendingPage + 1}</span>
                   </button>
                 </div>
               )}
-              {loadingMore && (
+              {trendingQuery.isFetchingNextPage && (
                 <div className="flex-shrink-0 w-40 sm:w-48">
                   <div className="bg-gray-800 animate-pulse rounded-lg aspect-[2/3]" />
                 </div>
               )}
-              {!hasMoreTrending && trending.length > 0 && (
+              {!trendingQuery.hasNextPage && trending.length > 0 && (
                 <div className="flex-shrink-0 w-40 sm:w-48 flex items-center justify-center">
                   <div className="text-gray-500 text-sm text-center px-4">
                     End of trending
@@ -713,7 +530,7 @@ export default function Dashboard() {
               {canScrollRightAnticipated ? 'Scroll to see more' : 'End of anticipated'}
             </span>
           </div>
-          {loadingAnticipated ? (
+          {anticipatedQuery.isLoading ? (
             <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
               {Array.from({ length: 10 }).map((_, i) => (
                 <div key={i} className="flex-shrink-0 w-40 sm:w-48">
@@ -734,26 +551,25 @@ export default function Dashboard() {
                   />
                 </div>
               ))}
-              {(hasMoreAnticipated || anticipatedPage === 1) && !loadingMoreAnticipated && (
+              {anticipatedQuery.hasNextPage && !anticipatedQuery.isFetchingNextPage && (
                 <div className="flex-shrink-0 w-40 sm:w-48 flex items-center justify-center">
                   <button
-                    onClick={loadMoreAnticipated}
+                    onClick={() => anticipatedQuery.fetchNextPage()}
                     className="w-full h-full min-h-[240px] bg-gradient-to-br from-gray-800 to-gray-900 hover:from-gray-700 hover:to-gray-800 text-white rounded-lg border-2 border-dashed border-gray-600 hover:border-primary-500 transition-all duration-200 flex flex-col items-center justify-center gap-3 shadow-lg"
                   >
                     <svg className="w-10 h-10 text-primary-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                     </svg>
                     <span className="text-base font-semibold">Load More</span>
-                    <span className="text-xs text-gray-400">Page {anticipatedPage + 1}</span>
                   </button>
                 </div>
               )}
-              {loadingMoreAnticipated && (
+              {anticipatedQuery.isFetchingNextPage && (
                 <div className="flex-shrink-0 w-40 sm:w-48">
                   <div className="bg-gray-800 animate-pulse rounded-lg aspect-[2/3]" />
                 </div>
               )}
-              {!hasMoreAnticipated && anticipated.length > 0 && (
+              {!anticipatedQuery.hasNextPage && anticipated.length > 0 && (
                 <div className="flex-shrink-0 w-40 sm:w-48 flex items-center justify-center">
                   <div className="text-gray-500 text-sm text-center px-4">
                     End of anticipated
@@ -802,7 +618,7 @@ export default function Dashboard() {
               {canScrollRightPopular ? 'Scroll to see more' : 'End of popular'}
             </span>
           </div>
-          {loadingPopular ? (
+          {popularQuery.isLoading ? (
             <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
               {Array.from({ length: 10 }).map((_, i) => (
                 <div key={i} className="flex-shrink-0 w-40 sm:w-48">
@@ -823,26 +639,25 @@ export default function Dashboard() {
                   />
                 </div>
               ))}
-              {(hasMorePopular || popularPage === 1) && !loadingMorePopular && (
+              {popularQuery.hasNextPage && !popularQuery.isFetchingNextPage && (
                 <div className="flex-shrink-0 w-40 sm:w-48 flex items-center justify-center">
                   <button
-                    onClick={loadMorePopular}
+                    onClick={() => popularQuery.fetchNextPage()}
                     className="w-full h-full min-h-[240px] bg-gradient-to-br from-gray-800 to-gray-900 hover:from-gray-700 hover:to-gray-800 text-white rounded-lg border-2 border-dashed border-gray-600 hover:border-primary-500 transition-all duration-200 flex flex-col items-center justify-center gap-3 shadow-lg"
                   >
                     <svg className="w-10 h-10 text-primary-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                     </svg>
                     <span className="text-base font-semibold">Load More</span>
-                    <span className="text-xs text-gray-400">Page {popularPage + 1}</span>
                   </button>
                 </div>
               )}
-              {loadingMorePopular && (
+              {popularQuery.isFetchingNextPage && (
                 <div className="flex-shrink-0 w-40 sm:w-48">
                   <div className="bg-gray-800 animate-pulse rounded-lg aspect-[2/3]" />
                 </div>
               )}
-              {!hasMorePopular && popular.length > 0 && (
+              {!popularQuery.hasNextPage && popular.length > 0 && (
                 <div className="flex-shrink-0 w-40 sm:w-48 flex items-center justify-center">
                   <div className="text-gray-500 text-sm text-center px-4">
                     End of popular

@@ -1,13 +1,16 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Layout } from '../components/layout/Layout';
 import { MediaCard } from '../components/media/MediaCard';
 import { SkeletonGrid } from '../components/ui/Skeleton';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { useToast } from '../contexts/ToastContext';
+import { useAuth } from '../contexts/AuthContext';
 import { tmdbService } from '../services/tmdb';
+import { preferencesService } from '../services/preferences';
 import type { Movie, TVShow } from '../services/tmdb';
 
 export default function SearchPage() {
+  const { user } = useAuth();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Array<Movie | TVShow>>([]);
   const [loading, setLoading] = useState(false);
@@ -15,7 +18,17 @@ export default function SearchPage() {
   const [searched, setSearched] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
+  const [preferenceMap, setPreferenceMap] = useState<Map<string, 'like' | 'dislike'>>(new Map());
   const toast = useToast();
+
+  useEffect(() => {
+    if (!user || results.length === 0) return;
+    const items = results.map(item => ({
+      tmdbId: item.id,
+      mediaType: ('title' in item ? 'movie' : 'tv') as 'movie' | 'tv',
+    }));
+    preferencesService.getPreferencesForItems(items, user.id).then(setPreferenceMap);
+  }, [user, results]);
 
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -107,13 +120,17 @@ export default function SearchPage() {
               {currentPage < totalPages && ` (Page ${currentPage} of ${totalPages})`}
             </p>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-              {results.map((item, index) => (
-                <MediaCard
-                  key={`${item.id}-${index}`}
-                  item={item}
-                  mediaType={'title' in item ? 'movie' : 'tv'}
-                />
-              ))}
+              {results.map((item, index) => {
+                const mt = 'title' in item ? 'movie' : 'tv';
+                return (
+                  <MediaCard
+                    key={`${item.id}-${index}`}
+                    item={item}
+                    mediaType={mt}
+                    initialPreference={preferenceMap.get(`${item.id}-${mt}`) ?? null}
+                  />
+                );
+              })}
             </div>
             {currentPage < totalPages && (
               <div ref={observerTarget} className="mt-8">

@@ -7,13 +7,26 @@ import { GenreResults } from '../components/discovery/GenreResults';
 import { MediaCard } from '../components/media/MediaCard';
 import { tmdbService } from '../services/tmdb';
 import { userSettingsService } from '../services/userSettings';
+import { preferencesService } from '../services/preferences';
+import { useAuth } from '../contexts/AuthContext';
 import type { Movie, TVShow } from '../services/tmdb';
 
 export default function DiscoveryPage() {
+  const { user } = useAuth();
   const [selectedGenre, setSelectedGenre] = useState<{ id: number; name: string } | null>(null);
   const [trendingToday, setTrendingToday] = useState<Array<Movie | TVShow>>([]);
   const [loadingTrending, setLoadingTrending] = useState(true);
   const [englishOnly, setEnglishOnly] = useState(false);
+  const [preferenceMap, setPreferenceMap] = useState<Map<string, 'like' | 'dislike'>>(new Map());
+
+  useEffect(() => {
+    if (!user || trendingToday.length === 0) return;
+    const items = trendingToday.map(item => ({
+      tmdbId: item.id,
+      mediaType: ('title' in item ? 'movie' : 'tv') as 'movie' | 'tv',
+    }));
+    preferencesService.getPreferencesForItems(items, user.id).then(setPreferenceMap);
+  }, [user, trendingToday]);
 
   useEffect(() => {
     async function loadSettings() {
@@ -95,17 +108,21 @@ export default function DiscoveryPage() {
               </div>
             ) : (
               <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide snap-x snap-mandatory">
-                {trendingToday.map((item, index) => (
-                  <div key={item.id} className="flex-shrink-0 w-32 sm:w-40 snap-start relative">
-                    <div className="absolute -top-2 -left-2 z-10 w-8 h-8 bg-gradient-to-br from-primary-500 to-primary-600 rounded-full flex items-center justify-center text-white text-sm font-bold shadow-lg">
-                      {index + 1}
+                {trendingToday.map((item, index) => {
+                  const mt = 'title' in item ? 'movie' : 'tv';
+                  return (
+                    <div key={item.id} className="flex-shrink-0 w-32 sm:w-40 snap-start relative">
+                      <div className="absolute -top-2 -left-2 z-10 w-8 h-8 bg-gradient-to-br from-primary-500 to-primary-600 rounded-full flex items-center justify-center text-white text-sm font-bold shadow-lg">
+                        {index + 1}
+                      </div>
+                      <MediaCard
+                        item={item}
+                        mediaType={mt}
+                        initialPreference={preferenceMap.get(`${item.id}-${mt}`) ?? null}
+                      />
                     </div>
-                    <MediaCard
-                      item={item}
-                      mediaType={'title' in item ? 'movie' : 'tv'}
-                    />
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

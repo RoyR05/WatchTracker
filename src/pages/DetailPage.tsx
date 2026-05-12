@@ -217,13 +217,26 @@ export default function DetailPage() {
           await trackInteraction(user.id, parseInt(id), mediaType, 'completed');
         }
       } else {
-        const newItem: Database['public']['Tables']['watchlist_items']['Insert'] = {
+        const itemTitle = details ? ('title' in details ? details.title : details.name) : undefined;
+        const itemPosterPath = details?.poster_path || undefined;
+        const itemYear = details
+          ? ('release_date' in details && details.release_date
+            ? new Date(details.release_date).getFullYear()
+            : 'first_air_date' in details && details.first_air_date
+              ? new Date(details.first_air_date).getFullYear()
+              : undefined)
+          : undefined;
+
+        const newItem: any = {
           user_id: user.id,
           tmdb_id: parseInt(id),
           media_type: mediaType,
           status,
           started_at: status === 'watching' ? new Date().toISOString() : null,
           completed_at: status === 'completed' ? new Date().toISOString() : null,
+          title: itemTitle,
+          poster_path: itemPosterPath,
+          media_year: itemYear,
         };
 
         const { data, error } = await supabase

@@ -18,11 +18,12 @@ import type { Database } from '../../types/database.types';
 interface MediaCardProps {
   item: Movie | TVShow;
   mediaType: 'movie' | 'tv';
+  initialPreference?: 'like' | 'dislike' | null;
 }
 
 type WatchlistStatus = 'watching' | 'completed' | 'plan_to_watch' | 'dropped';
 
-export function MediaCard({ item, mediaType }: MediaCardProps) {
+export function MediaCard({ item, mediaType, initialPreference }: MediaCardProps) {
   const { user } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
@@ -40,13 +41,17 @@ export function MediaCard({ item, mediaType }: MediaCardProps) {
   const touchStartX = useRef(0);
 
   useEffect(() => {
+    if (initialPreference !== undefined) {
+      setPreference(initialPreference);
+      return;
+    }
     async function loadPreference() {
       if (!user) return;
       const pref = await preferencesService.getPreference(item.id, mediaType, user.id);
       setPreference(pref);
     }
     loadPreference();
-  }, [user, item.id, mediaType]);
+  }, [user, item.id, mediaType, initialPreference]);
 
   async function handleLike() {
     if (!user) {

@@ -141,6 +141,33 @@ export const preferencesService = {
     }
   },
 
+  async getPreferencesForItems(
+    items: Array<{ tmdbId: number; mediaType: MediaType }>,
+    userId: string
+  ): Promise<Map<string, 'like' | 'dislike'>> {
+    const result = new Map<string, 'like' | 'dislike'>();
+    if (items.length === 0) return result;
+
+    try {
+      const tmdbIds = items.map(i => i.tmdbId);
+      const { data, error } = await supabase
+        .from('user_preferences')
+        .select('tmdb_id, media_type, preference_type')
+        .eq('user_id', userId)
+        .in('tmdb_id', tmdbIds)
+        .in('preference_type', ['like', 'dislike']);
+
+      if (error || !data) return result;
+
+      for (const row of data) {
+        result.set(`${row.tmdb_id}-${row.media_type}`, row.preference_type as 'like' | 'dislike');
+      }
+    } catch (error) {
+      console.error('Error batch fetching preferences:', error);
+    }
+    return result;
+  },
+
   async getPreferences(): Promise<UserPreference[]> {
     try {
       const { data: { user } } = await supabase.auth.getUser();
