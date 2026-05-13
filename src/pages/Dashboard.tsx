@@ -15,7 +15,6 @@ import { userSettingsService } from '../services/userSettings';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { queryKeys } from '../lib/queryKeys';
-import { CacheTTL } from '../services/cache';
 import type { Movie, TVShow } from '../services/tmdb';
 
 interface WatchlistItem {
@@ -99,7 +98,7 @@ export default function Dashboard() {
     queryFn: ({ pageParam }) => tmdbService.getTrending(mediaType, timeWindow, pageParam as number, englishOnly),
     getNextPageParam: (last, pages) => (last?.total_pages ?? 0) > pages.length ? pages.length + 1 : undefined,
     initialPageParam: 1,
-    staleTime: CacheTTL.TRENDING,
+    staleTime: 5 * 60 * 1000,
     enabled,
   });
 
@@ -114,7 +113,7 @@ export default function Dashboard() {
     queryFn: ({ pageParam }) => tmdbService.getAnticipated(mediaType, pageParam as number, englishOnly),
     getNextPageParam: (last, pages) => (last?.total_pages ?? 0) > pages.length ? pages.length + 1 : undefined,
     initialPageParam: 1,
-    staleTime: CacheTTL.DISCOVERY,
+    staleTime: 10 * 60 * 1000,
     enabled,
   });
 
@@ -129,7 +128,7 @@ export default function Dashboard() {
     queryFn: ({ pageParam }) => tmdbService.getPopular(mediaType, pageParam as number, englishOnly),
     getNextPageParam: (last, pages) => (last?.total_pages ?? 0) > pages.length ? pages.length + 1 : undefined,
     initialPageParam: 1,
-    staleTime: CacheTTL.DISCOVERY,
+    staleTime: 10 * 60 * 1000,
     enabled,
   });
 

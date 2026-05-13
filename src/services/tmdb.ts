@@ -1,6 +1,4 @@
-import { apiCache, CacheTTL } from './cache';
-
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+﻿const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const TMDB_PROXY_URL = `${SUPABASE_URL}/functions/v1/tmdb-proxy`;
 
 export interface Movie {
@@ -134,26 +132,15 @@ export interface PersonCredits {
   crew: CrewMember[];
 }
 
-async function tmdbFetch(endpoint: string, params: Record<string, string> = {}, retries = 0, cacheTTL?: number): Promise<any> {
-  const cacheKey = apiCache.generateKey(endpoint, params);
-
-  const cachedData = apiCache.get(cacheKey);
-  if (cachedData) {
-    return cachedData;
-  }
-
-  const searchParams = new URLSearchParams({
-    endpoint,
-    ...params,
-  });
-
+async function tmdbFetch(endpoint: string, params: Record<string, string> = {}, retries = 0): Promise<any> {
+  const searchParams = new URLSearchParams({ endpoint, ...params });
   const response = await fetch(`${TMDB_PROXY_URL}?${searchParams.toString()}`);
 
   if (response.status === 429) {
     if (retries < 3) {
       const waitTime = Math.pow(2, retries) * 1000;
       await new Promise(resolve => setTimeout(resolve, waitTime));
-      return tmdbFetch(endpoint, params, retries + 1, cacheTTL);
+      return tmdbFetch(endpoint, params, retries + 1);
     }
     throw new Error('TMDB API rate limit exceeded. Please try again in a few moments.');
   }
@@ -162,13 +149,7 @@ async function tmdbFetch(endpoint: string, params: Record<string, string> = {}, 
     throw new Error(`TMDB API error: ${response.statusText}`);
   }
 
-  const data = await response.json();
-
-  if (cacheTTL !== undefined) {
-    apiCache.set(cacheKey, data, cacheTTL);
-  }
-
-  return data;
+  return response.json();
 }
 
 export const tmdbService = {
@@ -191,7 +172,7 @@ export const tmdbService = {
   },
 
   searchMulti: async (query: string, page = 1): Promise<{ results: Array<Movie | TVShow>; total_pages: number }> => {
-    return tmdbFetch('/search/multi', { query, page: page.toString() }, 0, CacheTTL.SEARCH);
+    return tmdbFetch('/search/multi', { query, page: page.toString() });
   },
 
   getTrending: async (mediaType: 'movie' | 'tv' | 'all' = 'all', timeWindow: 'day' | 'week' = 'week', page = 1, englishOnly = false) => {
@@ -201,7 +182,7 @@ export const tmdbService = {
         'with_original_language': 'en',
         'sort_by': 'popularity.desc',
         'vote_count.gte': '100'
-      }, 0, CacheTTL.TRENDING);
+      });
     } else if (englishOnly && mediaType === 'all') {
       const [movies, tvShows] = await Promise.all([
         tmdbFetch('/discover/movie', {
@@ -209,13 +190,13 @@ export const tmdbService = {
           'with_original_language': 'en',
           'sort_by': 'popularity.desc',
           'vote_count.gte': '100'
-        }, 0, CacheTTL.TRENDING),
+        }),
         tmdbFetch('/discover/tv', {
           page: page.toString(),
           'with_original_language': 'en',
           'sort_by': 'popularity.desc',
           'vote_count.gte': '100'
-        }, 0, CacheTTL.TRENDING)
+        })
       ]);
 
       const combined = [
@@ -230,19 +211,19 @@ export const tmdbService = {
       };
     }
 
-    return tmdbFetch(`/trending/${mediaType}/${timeWindow}`, { page: page.toString() }, 0, CacheTTL.TRENDING);
+    return tmdbFetch(`/trending/${mediaType}/${timeWindow}`, { page: page.toString() });
   },
 
   getMovieDetails: async (movieId: number): Promise<MovieDetails> => {
-    return tmdbFetch(`/movie/${movieId}`, {}, 0, CacheTTL.DETAILS);
+    return tmdbFetch(`/movie/${movieId}`, {});
   },
 
   getTVShowDetails: async (tvId: number): Promise<TVShowDetails> => {
-    return tmdbFetch(`/tv/${tvId}`, {}, 0, CacheTTL.DETAILS);
+    return tmdbFetch(`/tv/${tvId}`, {});
   },
 
   getSeasonDetails: async (tvId: number, seasonNumber: number): Promise<Season> => {
-    return tmdbFetch(`/tv/${tvId}/season/${seasonNumber}`, {}, 0, CacheTTL.DETAILS);
+    return tmdbFetch(`/tv/${tvId}/season/${seasonNumber}`, {});
   },
 
   getPopularMovies: async (page = 1, englishOnly = false) => {
@@ -251,9 +232,9 @@ export const tmdbService = {
         page: page.toString(),
         'with_original_language': 'en',
         'sort_by': 'popularity.desc'
-      }, 0, CacheTTL.DISCOVERY);
+      });
     }
-    return tmdbFetch('/movie/popular', { page: page.toString() }, 0, CacheTTL.DISCOVERY);
+    return tmdbFetch('/movie/popular', { page: page.toString() });
   },
 
   getPopularTVShows: async (page = 1, englishOnly = false) => {
@@ -262,48 +243,48 @@ export const tmdbService = {
         page: page.toString(),
         'with_original_language': 'en',
         'sort_by': 'popularity.desc'
-      }, 0, CacheTTL.DISCOVERY);
+      });
     }
-    return tmdbFetch('/tv/popular', { page: page.toString() }, 0, CacheTTL.DISCOVERY);
+    return tmdbFetch('/tv/popular', { page: page.toString() });
   },
 
   getTopRatedMovies: async (page = 1) => {
-    return tmdbFetch('/movie/top_rated', { page: page.toString() }, 0, CacheTTL.DISCOVERY);
+    return tmdbFetch('/movie/top_rated', { page: page.toString() });
   },
 
   getTopRatedTVShows: async (page = 1) => {
-    return tmdbFetch('/tv/top_rated', { page: page.toString() }, 0, CacheTTL.DISCOVERY);
+    return tmdbFetch('/tv/top_rated', { page: page.toString() });
   },
 
   getMovieCredits: async (movieId: number): Promise<Credits> => {
-    return tmdbFetch(`/movie/${movieId}/credits`, {}, 0, CacheTTL.CREDITS);
+    return tmdbFetch(`/movie/${movieId}/credits`, {});
   },
 
   getTVShowCredits: async (tvId: number): Promise<Credits> => {
-    return tmdbFetch(`/tv/${tvId}/credits`, {}, 0, CacheTTL.CREDITS);
+    return tmdbFetch(`/tv/${tvId}/credits`, {});
   },
 
   getMovieVideos: async (movieId: number): Promise<VideosResponse> => {
-    return tmdbFetch(`/movie/${movieId}/videos`, {}, 0, CacheTTL.VIDEOS);
+    return tmdbFetch(`/movie/${movieId}/videos`, {});
   },
 
   getTVShowVideos: async (tvId: number): Promise<VideosResponse> => {
-    return tmdbFetch(`/tv/${tvId}/videos`, {}, 0, CacheTTL.VIDEOS);
+    return tmdbFetch(`/tv/${tvId}/videos`, {});
   },
 
   getPersonDetails: async (personId: number): Promise<PersonDetails> => {
-    return tmdbFetch(`/person/${personId}`, {}, 0, CacheTTL.DETAILS);
+    return tmdbFetch(`/person/${personId}`, {});
   },
 
   getPersonCombinedCredits: async (personId: number): Promise<PersonCredits> => {
-    return tmdbFetch(`/person/${personId}/combined_credits`, {}, 0, CacheTTL.CREDITS);
+    return tmdbFetch(`/person/${personId}/combined_credits`, {});
   },
 
   discover: async (
     mediaType: 'movie' | 'tv',
     params: Record<string, string> = {}
   ): Promise<{ results: Array<Movie | TVShow>; total_pages: number }> => {
-    return tmdbFetch(`/discover/${mediaType}`, params, 0, CacheTTL.DISCOVERY);
+    return tmdbFetch(`/discover/${mediaType}`, params);
   },
 
   getUpcomingMovies: async (page = 1, englishOnly = false) => {
@@ -321,9 +302,9 @@ export const tmdbService = {
         'release_date.gte': todayStr,
         'release_date.lte': futureDateStr,
         'sort_by': 'release_date.asc'
-      }, 0, CacheTTL.DISCOVERY);
+      });
     }
-    return tmdbFetch('/movie/upcoming', { page: page.toString() }, 0, CacheTTL.DISCOVERY);
+    return tmdbFetch('/movie/upcoming', { page: page.toString() });
   },
 
   getUpcomingTVShows: async (page = 1, englishOnly = false) => {
@@ -345,7 +326,7 @@ export const tmdbService = {
       params['with_original_language'] = 'en';
     }
 
-    return tmdbFetch('/discover/tv', params, 0, CacheTTL.DISCOVERY);
+    return tmdbFetch('/discover/tv', params);
   },
 
   getAnticipated: async (mediaType: 'movie' | 'tv' | 'all' = 'all', page = 1, englishOnly = false) => {
@@ -400,3 +381,4 @@ export const tmdbService = {
     }
   },
 };
+
