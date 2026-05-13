@@ -9,9 +9,12 @@ import { tmdbService } from '../services/tmdb';
 import { preferencesService } from '../services/preferences';
 import type { Movie, TVShow } from '../services/tmdb';
 
+type MediaFilter = 'all' | 'movie' | 'tv';
+
 export default function SearchPage() {
   const { user } = useAuth();
   const [query, setQuery] = useState('');
+  const [mediaFilter, setMediaFilter] = useState<MediaFilter>('all');
   const [results, setResults] = useState<Array<Movie | TVShow>>([]);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -30,21 +33,26 @@ export default function SearchPage() {
     preferencesService.getPreferencesForItems(items, user.id).then(setPreferenceMap);
   }, [user, results]);
 
+  const filteredResults = mediaFilter === 'all'
+    ? results
+    : results.filter(item =>
+        mediaFilter === 'movie' ? 'title' in item : 'name' in item
+      );
+
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault();
     if (!query.trim()) return;
-
     setLoading(true);
     setSearched(true);
     setCurrentPage(1);
     try {
       const data = await tmdbService.searchMulti(query, 1);
-      const filteredResults = data.results.filter((item: any) => item.media_type === 'movie' || item.media_type === 'tv');
-      setResults(filteredResults);
+      const filtered = (data.results as any[]).filter(
+        item => item.media_type === 'movie' || item.media_type === 'tv'
+      );
+      setResults(filtered);
       setTotalPages(data.total_pages);
-      if (filteredResults.length === 0) {
-        toast.info('No results found. Try a different search term.');
-      }
+      if (filtered.length === 0) toast.info('No results found. Try a different search term.');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to search');
     } finally {
@@ -54,15 +62,16 @@ export default function SearchPage() {
 
   async function loadMore() {
     if (loadingMore || currentPage >= totalPages) return;
-
     setLoadingMore(true);
     try {
       const nextPage = currentPage + 1;
       const data = await tmdbService.searchMulti(query, nextPage);
-      const filteredResults = data.results.filter((item: any) => item.media_type === 'movie' || item.media_type === 'tv');
-      setResults(prev => [...prev, ...filteredResults]);
+      const filtered = (data.results as any[]).filter(
+        item => item.media_type === 'movie' || item.media_type === 'tv'
+      );
+      setResults(prev => [...prev, ...filtered]);
       setCurrentPage(nextPage);
-    } catch (error) {
+    } catch {
       toast.error('Failed to load more results');
     } finally {
       setLoadingMore(false);
@@ -75,52 +84,76 @@ export default function SearchPage() {
     onLoadMore: loadMore,
   });
 
+  const filterButtons: { label: string; value: MediaFilter }[] = [
+    { label: 'All', value: 'all' },
+    { label: 'Movies', value: 'movie' },
+    { label: 'TV Shows', value: 'tv' },
+  ];
+
   return (
     <Layout>
       <div className="max-w-7xl mx-auto">
-        <h1 className="text-3xl font-bold text-white mb-6">Search Movies & TV Shows</h1>
+        <h1 className="text-3xl font-bold text-white mb-6">Search</h1>
 
-        <form onSubmit={handleSearch} className="mb-8">
+        <form onSubmit={handleSearch} className="mb-4">
           <div className="relative">
+            <svg
+              className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"
+              fill="none" stroke="currentColor" viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
             <input
               type="text"
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search for movies, TV shows..."
-              className="w-full px-4 py-3 pl-12 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              onChange={e => setQuery(e.target.value)}
+              placeholder="Search movies, TV shows..."
+              className="w-full px-4 py-3 pl-12 pr-28 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             />
-            <svg
-              className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-              />
-            </svg>
             <button
               type="submit"
-              className="absolute right-2 top-1/2 transform -translate-y-1/2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-md transition-colors"
+              className="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-md transition-colors text-sm font-medium"
             >
               Search
             </button>
           </div>
         </form>
 
+        {/* Media type filter — only show after a search */}
+        {searched && (
+          <div className="flex gap-2 mb-6">
+            {filterButtons.map(btn => (
+              <button
+                key={btn.value}
+                onClick={() => setMediaFilter(btn.value)}
+                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                  mediaFilter === btn.value
+                    ? 'bg-primary-600 text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                }`}
+              >
+                {btn.label}
+                {btn.value !== 'all' && results.length > 0 && (
+                  <span className="ml-1.5 text-xs opacity-70">
+                    ({results.filter(r => btn.value === 'movie' ? 'title' in r : 'name' in r).length})
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+
         {loading && <SkeletonGrid count={20} />}
 
-        {!loading && results.length > 0 && (
+        {!loading && filteredResults.length > 0 && (
           <div>
-            <p className="text-gray-400 mb-4">
-              {results.length} results found
-              {currentPage < totalPages && ` (Page ${currentPage} of ${totalPages})`}
+            <p className="text-gray-400 mb-4 text-sm">
+              {filteredResults.length}{mediaFilter !== 'all' ? ` ${mediaFilter === 'movie' ? 'movie' : 'TV show'}` : ''} result{filteredResults.length !== 1 ? 's' : ''}
+              {currentPage < totalPages && ` · page ${currentPage} of ${totalPages}`}
             </p>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-              {results.map((item, index) => {
+              {filteredResults.map((item, index) => {
                 const mt = 'title' in item ? 'movie' : 'tv';
                 return (
                   <MediaCard
@@ -140,22 +173,29 @@ export default function SearchPage() {
           </div>
         )}
 
-        {!searched && !loading && (
-          <div className="bg-gray-800 rounded-lg p-8 text-center">
-            <svg
-              className="mx-auto h-12 w-12 text-gray-600 mb-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-              />
+        {!loading && searched && filteredResults.length === 0 && (
+          <div className="bg-gray-800 rounded-lg p-12 text-center">
+            <svg className="mx-auto h-12 w-12 text-gray-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
-            <p className="text-gray-400">Start searching for your favorite movies and TV shows</p>
+            <p className="text-white font-medium mb-1">No results found</p>
+            <p className="text-gray-400 text-sm">
+              {mediaFilter !== 'all'
+                ? `No ${mediaFilter === 'movie' ? 'movies' : 'TV shows'} matched "${query}". Try switching the filter to All.`
+                : `No results for "${query}". Try different keywords.`}
+            </p>
+          </div>
+        )}
+
+        {!searched && !loading && (
+          <div className="bg-gray-800 rounded-lg p-12 text-center">
+            <svg className="mx-auto h-12 w-12 text-gray-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <p className="text-white font-medium mb-1">Search for anything</p>
+            <p className="text-gray-400 text-sm">Find movies and TV shows to add to your watchlist</p>
           </div>
         )}
       </div>

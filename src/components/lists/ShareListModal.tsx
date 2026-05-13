@@ -35,14 +35,12 @@ export function ShareListModal({ isOpen, onClose, listId, listName }: ShareListM
   async function loadShares() {
     try {
       setLoading(true);
-      console.log('[ShareList] Loading shares for list:', listId);
       const { data, error } = await supabase
         .from('list_shares')
         .select('*, profiles(*)')
         .eq('list_id', listId);
 
       if (error) throw error;
-      console.log('[ShareList] Loaded shares:', data?.length || 0);
       setShares(data as ShareWithProfile[] || []);
     } catch (error) {
       console.error('[ShareList] Error loading shares:', error);
@@ -61,7 +59,6 @@ export function ShareListModal({ isOpen, onClose, listId, listName }: ShareListM
     try {
       setSearching(true);
       setError(null);
-      console.log('[ShareList] Searching for users:', searchQuery);
 
       const { data, error } = await supabase
         .from('profiles')
@@ -74,8 +71,6 @@ export function ShareListModal({ isOpen, onClose, listId, listName }: ShareListM
 
       const alreadySharedIds = shares.map(s => s.shared_with_user_id);
       const filtered = (data || []).filter(profile => !alreadySharedIds.includes(profile.id));
-
-      console.log('[ShareList] Found users:', filtered.length);
       setSearchResults(filtered);
     } catch (error) {
       console.error('[ShareList] Error searching users:', error);
@@ -88,7 +83,6 @@ export function ShareListModal({ isOpen, onClose, listId, listName }: ShareListM
   async function shareWithUser(userId: string, canEdit: boolean) {
     try {
       setError(null);
-      console.log('[ShareList] Sharing list with user:', userId, 'canEdit:', canEdit);
 
       const { error } = await supabase
         .from('list_shares')
@@ -99,8 +93,6 @@ export function ShareListModal({ isOpen, onClose, listId, listName }: ShareListM
         });
 
       if (error) throw error;
-
-      console.log('[ShareList] List shared successfully');
       setSearchQuery('');
       setSearchResults([]);
       await loadShares();
@@ -113,7 +105,6 @@ export function ShareListModal({ isOpen, onClose, listId, listName }: ShareListM
   async function removeShare(shareId: string) {
     try {
       setError(null);
-      console.log('[ShareList] Removing share:', shareId);
 
       const { error } = await supabase
         .from('list_shares')
@@ -121,8 +112,6 @@ export function ShareListModal({ isOpen, onClose, listId, listName }: ShareListM
         .eq('id', shareId);
 
       if (error) throw error;
-
-      console.log('[ShareList] Share removed successfully');
       await loadShares();
     } catch (error) {
       console.error('[ShareList] Error removing share:', error);

@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { Layout } from '../components/layout/Layout';
 import { EpisodeTracker } from '../components/tv/EpisodeTracker';
 import { RecommendModal } from '../components/recommendations/RecommendModal';
@@ -10,8 +11,9 @@ import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { preferencesService } from '../services/preferences';
 import { plexService } from '../services/plex';
+import { queryKeys } from '../lib/queryKeys';
 import type { PlexAvailability, PlexRequest } from '../services/plex';
-import type { MovieDetails, TVShowDetails, CastMember, CrewMember, Video } from '../services/tmdb';
+import type { MovieDetails, TVShowDetails, Video, CastMember, CrewMember, VideosResponse } from '../services/tmdb';
 import type { Database } from '../types/database.types';
 
 type WatchlistItem = Database['public']['Tables']['watchlist_items']['Row'];
@@ -21,13 +23,44 @@ export default function DetailPage() {
   const { mediaType, id } = useParams<{ mediaType: 'movie' | 'tv'; id: string }>();
   const { user } = useAuth();
   const toast = useToast();
-  const [details, setDetails] = useState<MovieDetails | TVShowDetails | null>(null);
-  const [cast, setCast] = useState<CastMember[]>([]);
-  const [crew, setCrew] = useState<CrewMember[]>([]);
-  const [videos, setVideos] = useState<Video[]>([]);
+  const tmdbId = parseInt(id || '0');
+
+  // TMDB data â€” cached via React Query (instant on back-navigation)
+  const { data: details, isLoading: detailsLoading } = useQuery<MovieDetails | TVShowDetails>({
+    queryKey: mediaType === 'movie' ? queryKeys.movieDetails(tmdbId) : queryKeys.tvDetails(tmdbId),
+    queryFn: () => mediaType === 'movie'
+      ? tmdbService.getMovieDetails(tmdbId)
+      : tmdbService.getTVShowDetails(tmdbId),
+    enabled: !!id && !!mediaType,
+    staleTime: 30 * 60 * 1000,
+  });
+
+  const { data: credits } = useQuery<{ cast: CastMember[]; crew: CrewMember[] }>({
+    queryKey: mediaType === 'movie' ? queryKeys.movieCredits(tmdbId) : queryKeys.tvCredits(tmdbId),
+    queryFn: () => mediaType === 'movie'
+      ? tmdbService.getMovieCredits(tmdbId)
+      : tmdbService.getTVShowCredits(tmdbId),
+    enabled: !!id && !!mediaType,
+    staleTime: 30 * 60 * 1000,
+  });
+
+  const { data: videosData } = useQuery<VideosResponse>({
+    queryKey: mediaType === 'movie' ? queryKeys.movieVideos(tmdbId) : queryKeys.tvVideos(tmdbId),
+    queryFn: () => mediaType === 'movie'
+      ? tmdbService.getMovieVideos(tmdbId)
+      : tmdbService.getTVShowVideos(tmdbId),
+    enabled: !!id && !!mediaType,
+    staleTime: 30 * 60 * 1000,
+  });
+
+  const cast = credits?.cast ?? [];
+  const crew = credits?.crew ?? [];
+  const videos: Video[] = (videosData?.results ?? []).filter(v => v.site === 'YouTube');
+  const loading = detailsLoading;
+
+  // Watchlist + preference â€” kept as local state (mutated frequently)
   const [watchlistItem, setWatchlistItem] = useState<WatchlistItem | null>(null);
   const [preference, setPreference] = useState<'like' | 'dislike' | null>(null);
-  const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [showRecommendModal, setShowRecommendModal] = useState(false);
   const [showAddToListModal, setShowAddToListModal] = useState(false);
@@ -38,50 +71,20 @@ export default function DetailPage() {
   const [plexSubmitting, setPlexSubmitting] = useState(false);
 
   useEffect(() => {
-    async function loadDetails() {
-      if (!id || !mediaType || !user) return;
-
-      try {
-        const [detailsData, creditsData, videosData, watchlistData, preferenceData] = await Promise.all([
-          mediaType === 'movie'
-            ? tmdbService.getMovieDetails(parseInt(id))
-            : tmdbService.getTVShowDetails(parseInt(id)),
-          mediaType === 'movie'
-            ? tmdbService.getMovieCredits(parseInt(id))
-            : tmdbService.getTVShowCredits(parseInt(id)),
-          mediaType === 'movie'
-            ? tmdbService.getMovieVideos(parseInt(id))
-            : tmdbService.getTVShowVideos(parseInt(id)),
-          supabase
-            .from('watchlist_items')
-            .select('*')
-            .eq('user_id', user.id)
-            .eq('tmdb_id', parseInt(id))
-            .eq('media_type', mediaType)
-            .maybeSingle(),
-          preferencesService.getPreference(parseInt(id), mediaType)
-        ]);
-
-        setDetails(detailsData);
-        setCast(creditsData.cast);
-        setCrew(creditsData.crew || []);
-
-        const youtubeVideos = videosData.results.filter(
-          (video) => video.site === 'YouTube'
-        );
-        setVideos(youtubeVideos);
-
-        setWatchlistItem(watchlistData.data);
-        setPreference(preferenceData);
-
-      } catch (error) {
-        console.error('Error loading details:', error);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    loadDetails();
+    if (!id || !mediaType || !user) return;
+    Promise.all([
+      supabase
+        .from('watchlist_items')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('tmdb_id', tmdbId)
+        .eq('media_type', mediaType)
+        .maybeSingle(),
+      preferencesService.getPreference(tmdbId, mediaType),
+    ]).then(([watchlistData, preferenceData]) => {
+      setWatchlistItem(watchlistData.data);
+      setPreference(preferenceData);
+    });
   }, [id, mediaType, user]);
 
   function buildContentMetadata() {
@@ -121,12 +124,12 @@ export default function DetailPage() {
     setUpdating(true);
     try {
       if (preference === 'like') {
-        await preferencesService.removePreference(parseInt(id), mediaType, 'like');
+        await preferencesService.removePreference(tmdbId, mediaType, 'like');
         setPreference(null);
         toast.success('Removed like');
       } else {
         const metadata = buildContentMetadata();
-        await preferencesService.setPreference(parseInt(id), mediaType, 'like', undefined, metadata);
+        await preferencesService.setPreference(tmdbId, mediaType, 'like', undefined, metadata);
         setPreference('like');
         toast.success('Added to liked');
       }
@@ -151,12 +154,12 @@ export default function DetailPage() {
     setUpdating(true);
     try {
       if (preference === 'dislike') {
-        await preferencesService.removePreference(parseInt(id), mediaType, 'dislike');
+        await preferencesService.removePreference(tmdbId, mediaType, 'dislike');
         setPreference(null);
         toast.success('Removed dislike');
       } else {
         const metadata = buildContentMetadata();
-        await preferencesService.setPreference(parseInt(id), mediaType, 'dislike', undefined, metadata);
+        await preferencesService.setPreference(tmdbId, mediaType, 'dislike', undefined, metadata);
         setPreference('dislike');
         toast.success('Added to disliked');
       }
@@ -209,7 +212,7 @@ export default function DetailPage() {
 
         const newItem: any = {
           user_id: user.id,
-          tmdb_id: parseInt(id),
+          tmdb_id: tmdbId,
           media_type: mediaType,
           status,
           started_at: status === 'watching' ? new Date().toISOString() : null,
@@ -266,7 +269,7 @@ export default function DetailPage() {
 
       const [availability, existingRequest] = await Promise.all([
         plexService.checkAvailability(titleStr, yearStr, mediaType),
-        plexService.checkExistingRequest(parseInt(id!), mediaType),
+        plexService.checkExistingRequest(tmdbId, mediaType),
       ]);
 
       setPlexAvailability(availability);
@@ -289,7 +292,7 @@ export default function DetailPage() {
       const request = await plexService.submitRequest(
         user.id,
         null,
-        parseInt(id),
+        tmdbId,
         mediaType,
         titleStr,
         details.poster_path
@@ -317,7 +320,7 @@ export default function DetailPage() {
       const request = await plexService.reportBadFile(
         user.id,
         null,
-        parseInt(id),
+        tmdbId,
         mediaType,
         titleStr,
         details.poster_path
@@ -396,7 +399,7 @@ export default function DetailPage() {
                     {formattedDate && (
                       <>
                         <span>{formattedDate}</span>
-                        <span className="text-white/40">•</span>
+                        <span className="text-white/40">â€¢</span>
                       </>
                     )}
                     <div className="flex flex-wrap items-center gap-1">
@@ -409,7 +412,7 @@ export default function DetailPage() {
                     </div>
                     {'runtime' in details && details.runtime > 0 && (
                       <>
-                        <span className="text-white/40">•</span>
+                        <span className="text-white/40">â€¢</span>
                         <span>{formatRuntime(details.runtime)}</span>
                       </>
                     )}
@@ -772,3 +775,5 @@ export default function DetailPage() {
     </Layout>
   );
 }
+
+

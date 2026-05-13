@@ -137,6 +137,18 @@ export function Layout({ children }: LayoutProps) {
                   Search
                 </NavLink>
                 <NavLink
+                  to="/watchlist"
+                  className={({ isActive }) =>
+                    `px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                      isActive
+                        ? 'bg-gray-900 text-white'
+                        : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                    }`
+                  }
+                >
+                  Watchlist
+                </NavLink>
+                <NavLink
                   to="/lists"
                   className={({ isActive }) =>
                     `px-3 py-2 rounded-md text-sm font-medium transition-colors ${
@@ -177,6 +189,18 @@ export function Layout({ children }: LayoutProps) {
                     </span>
                   )}
                 </NavLink>
+                <NavLink
+                  to="/social"
+                  className={({ isActive }) =>
+                    `px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                      isActive
+                        ? 'bg-gray-900 text-white'
+                        : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                    }`
+                  }
+                >
+                  Social
+                </NavLink>
               </div>
             </div>
             <div className="flex items-center space-x-4">
@@ -205,11 +229,19 @@ export function Layout({ children }: LayoutProps) {
                 to="/profile"
                 className="flex items-center space-x-2 text-gray-300 hover:text-white transition-colors"
               >
-                <div className="h-8 w-8 rounded-full bg-primary-600 flex items-center justify-center">
-                  <span className="text-sm font-medium text-white">
-                    {profile?.username?.charAt(0).toUpperCase() || 'U'}
-                  </span>
-                </div>
+                {profile?.avatar_url ? (
+                  <img
+                    src={profile.avatar_url}
+                    alt=""
+                    className="h-8 w-8 rounded-full object-cover ring-1 ring-gray-600"
+                  />
+                ) : (
+                  <div className="h-8 w-8 rounded-full bg-primary-600 flex items-center justify-center">
+                    <span className="text-sm font-medium text-white">
+                      {profile?.username?.charAt(0).toUpperCase() || 'U'}
+                    </span>
+                  </div>
+                )}
                 <span className="hidden sm:block text-sm">{profile?.username}</span>
               </NavLink>
               <button
@@ -285,7 +317,7 @@ export function Layout({ children }: LayoutProps) {
             <span className="text-xs mt-1">Search</span>
           </NavLink>
           <NavLink
-            to="/lists"
+            to="/watchlist"
             className={({ isActive }) =>
               `flex-1 flex flex-col items-center justify-center py-3 ${
                 isActive ? 'text-primary-500' : 'text-gray-400'
@@ -293,9 +325,9 @@ export function Layout({ children }: LayoutProps) {
             }
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
             </svg>
-            <span className="text-xs mt-1">Lists</span>
+            <span className="text-xs mt-1">Watchlist</span>
           </NavLink>
           <NavLink
             to="/recommendations"

@@ -77,27 +77,29 @@ export default function RecommendationsPage() {
 
       setRecommendations(recs);
 
-      const uniqueMedia = new Set(recs.map(r => `${r.media_type}-${r.tmdb_id}`));
+      const uniqueKeys = [...new Set(recs.map(r => `${r.media_type}-${r.tmdb_id}`))];
+      const detailEntries = await Promise.all(
+        uniqueKeys.map(async key => {
+          const [type, idStr] = key.split('-');
+          try {
+            const data = type === 'movie'
+              ? await tmdbService.getMovieDetails(parseInt(idStr))
+              : await tmdbService.getTVShowDetails(parseInt(idStr));
+            return [key, {
+              title: 'title' in data ? data.title : data.name,
+              poster_path: data.poster_path,
+              release_date: 'release_date' in data ? data.release_date : undefined,
+              first_air_date: 'first_air_date' in data ? data.first_air_date : undefined,
+            }] as const;
+          } catch {
+            return null;
+          }
+        })
+      );
       const details: Record<string, MediaDetails> = {};
-
-      for (const key of uniqueMedia) {
-        const [type, id] = key.split('-');
-        try {
-          const data = type === 'movie'
-            ? await tmdbService.getMovieDetails(parseInt(id))
-            : await tmdbService.getTVShowDetails(parseInt(id));
-
-          details[key] = {
-            title: 'title' in data ? data.title : data.name,
-            poster_path: data.poster_path,
-            release_date: 'release_date' in data ? data.release_date : undefined,
-            first_air_date: 'first_air_date' in data ? data.first_air_date : undefined,
-          };
-        } catch (error) {
-          console.error('Error loading media details:', error);
-        }
+      for (const entry of detailEntries) {
+        if (entry) details[entry[0]] = entry[1];
       }
-
       setMediaDetails(details);
     } catch (error) {
       console.error('Error loading recommendations:', error);

@@ -32,14 +32,12 @@ export function AddToListModal({ isOpen, onClose, tmdbId, mediaType, title }: Ad
 
   async function loadData() {
     if (!user) {
-      console.log('[AddToList] No user, skipping load');
       setLoading(false);
       return;
     }
 
     setLoading(true);
     try {
-      console.log('[AddToList] Loading data for user:', user.id);
       setError(null);
       const [listsData, itemsData] = await Promise.all([
         supabase
@@ -55,16 +53,9 @@ export function AddToListModal({ isOpen, onClose, tmdbId, mediaType, title }: Ad
           .eq('custom_lists.user_id', user.id)
       ]);
 
-      if (listsData.error) {
-        console.error('[AddToList] Error loading lists:', listsData.error);
-        throw listsData.error;
-      }
-      if (itemsData.error) {
-        console.error('[AddToList] Error loading list items:', itemsData.error);
-        throw itemsData.error;
-      }
+      if (listsData.error) throw listsData.error;
+      if (itemsData.error) throw itemsData.error;
 
-      console.log('[AddToList] Loaded:', { lists: listsData.data?.length, items: itemsData.data?.length });
       setLists(listsData.data || []);
       setListItems(itemsData.data || []);
     } catch (error) {
@@ -115,11 +106,8 @@ export function AddToListModal({ isOpen, onClose, tmdbId, mediaType, title }: Ad
   }
 
   async function createListAndAdd() {
-    console.log('[AddToList] Create list and add called', { user: user?.id, profile: profile?.id, name: newListName });
-
     if (!user || !profile || !newListName.trim()) {
       const errorMsg = !user ? 'No user logged in' : !profile ? 'Profile not loaded' : 'List name is required';
-      console.error('[AddToList] Cannot create list:', errorMsg);
       setError(`Unable to create list: ${errorMsg}. Please try logging out and back in.`);
       return;
     }
@@ -127,7 +115,6 @@ export function AddToListModal({ isOpen, onClose, tmdbId, mediaType, title }: Ad
     setUpdating('creating');
     try {
       setError(null);
-      console.log('[AddToList] Creating new list...');
       const { data: newList, error: listError } = await supabase
         .from('custom_lists')
         .insert({
@@ -137,16 +124,8 @@ export function AddToListModal({ isOpen, onClose, tmdbId, mediaType, title }: Ad
         .select()
         .single();
 
-      if (listError) {
-        console.error('[AddToList] List creation error:', listError);
-        console.error('[AddToList] Error code:', listError.code);
-        console.error('[AddToList] Error details:', listError.details);
-        console.error('[AddToList] Error hint:', listError.hint);
-        console.error('[AddToList] Error message:', listError.message);
-        throw listError;
-      }
+      if (listError) throw listError;
 
-      console.log('[AddToList] List created, adding item...');
       const { data: newItem, error: itemError } = await supabase
         .from('list_items')
         .insert({
@@ -157,18 +136,12 @@ export function AddToListModal({ isOpen, onClose, tmdbId, mediaType, title }: Ad
         .select()
         .single();
 
-      if (itemError) {
-        console.error('[AddToList] Item creation error:', itemError);
-        throw itemError;
-      }
-
-      console.log('[AddToList] Success! List and item created');
+      if (itemError) throw itemError;
       setLists([...lists, newList]);
       setListItems([...listItems, newItem]);
       setNewListName('');
       setShowCreateForm(false);
     } catch (error) {
-      console.error('[AddToList] Error creating list:', error);
       let message = 'Failed to create list';
       if (error instanceof Error) {
         message = error.message;

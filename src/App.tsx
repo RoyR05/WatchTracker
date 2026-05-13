@@ -27,6 +27,7 @@ import { PermissionsPage } from './pages/admin/PermissionsPage';
 import { SharesPage } from './pages/admin/SharesPage';
 import { NotificationsPage as AdminNotificationsPage } from './pages/admin/NotificationsPage';
 import { AuditLogPage } from './pages/admin/AuditLogPage';
+import WatchlistPage from './pages/WatchlistPage';
 import PlexRequestsPage from './pages/PlexRequestsPage';
 import AdminPlexRequestsPage from './pages/admin/PlexRequestsPage';
 import PlexSettingsPage from './pages/admin/PlexSettingsPage';
@@ -53,6 +54,7 @@ function AnimatedRoutes() {
         <Route path="/social" element={<ProtectedRoute><PageTransition><SocialPage /></PageTransition></ProtectedRoute>} />
         <Route path="/recommendations" element={<ProtectedRoute><PageTransition><RecommendationsPage /></PageTransition></ProtectedRoute>} />
         <Route path="/notifications" element={<ProtectedRoute><PageTransition><NotificationsPage /></PageTransition></ProtectedRoute>} />
+        <Route path="/watchlist" element={<ProtectedRoute><PageTransition><WatchlistPage /></PageTransition></ProtectedRoute>} />
         <Route path="/plex-requests" element={<ProtectedRoute><PageTransition><PlexRequestsPage /></PageTransition></ProtectedRoute>} />
         <Route path="/admin" element={<AdminRoute><PageTransition><AdminDashboard /></PageTransition></AdminRoute>} />
         <Route path="/admin/users" element={<AdminRoute><PageTransition><UsersPage /></PageTransition></AdminRoute>} />
