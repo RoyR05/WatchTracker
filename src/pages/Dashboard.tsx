@@ -71,6 +71,7 @@ export default function Dashboard() {
   const [englishOnly, setEnglishOnly] = useState(false);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [preferenceMap, setPreferenceMap] = useState<Map<string, 'like' | 'dislike'>>(new Map());
+  const [localDislikes, setLocalDislikes] = useState<Set<number>>(new Set());
   // poster overrides populated by sequential backfill (itemId → posterPath)
   const [posterOverrides, setPosterOverrides] = useState<Map<string, string>>(new Map());
   const backfilledIds = useRef<Set<string>>(new Set());
@@ -213,10 +214,19 @@ export default function Dashboard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [watchingItems, planToWatchItems]);
 
-  // Flatten pages into item arrays
-  const trending = useMemo(() => trendingPages?.pages.flatMap(p => p?.results ?? []) ?? [], [trendingPages]);
-  const anticipated = useMemo(() => anticipatedPages?.pages.flatMap(p => p?.results ?? []) ?? [], [anticipatedPages]);
-  const popular = useMemo(() => popularPages?.pages.flatMap(p => p?.results ?? []) ?? [], [popularPages]);
+  // Derive disliked IDs from preferenceMap (existing dislikes) + localDislikes (new this session)
+  const dislikedIds = useMemo(() => {
+    const ids = new Set<number>(localDislikes);
+    for (const [key, pref] of preferenceMap) {
+      if (pref === 'dislike') ids.add(parseInt(key.split('-')[0]));
+    }
+    return ids;
+  }, [preferenceMap, localDislikes]);
+
+  // Flatten pages into item arrays, filtering out explicitly disliked titles
+  const trending = useMemo(() => (trendingPages?.pages.flatMap(p => p?.results ?? []) ?? []).filter(i => !dislikedIds.has(i.id)), [trendingPages, dislikedIds]);
+  const anticipated = useMemo(() => (anticipatedPages?.pages.flatMap(p => p?.results ?? []) ?? []).filter(i => !dislikedIds.has(i.id)), [anticipatedPages, dislikedIds]);
+  const popular = useMemo(() => (popularPages?.pages.flatMap(p => p?.results ?? []) ?? []).filter(i => !dislikedIds.has(i.id)), [popularPages, dislikedIds]);
 
   // Batch-fetch preferences whenever items change
   useEffect(() => {
@@ -348,7 +358,7 @@ export default function Dashboard() {
             const type = 'title' in item ? 'movie' : 'tv';
             return (
               <div key={item.id} className="flex-shrink-0 w-40 sm:w-48 snap-start">
-                <MediaCard item={item} mediaType={type} initialPreference={preferenceMap.get(`${item.id}-${type}`) ?? null} />
+                <MediaCard item={item} mediaType={type} initialPreference={preferenceMap.get(`${item.id}-${type}`) ?? null} onDislike={(id) => setLocalDislikes(prev => new Set(prev).add(id))} />
               </div>
             );
           })}
@@ -368,7 +378,7 @@ export default function Dashboard() {
             const type = 'title' in item ? 'movie' : 'tv';
             return (
               <div key={item.id} className="flex-shrink-0 w-40 sm:w-48 snap-start">
-                <MediaCard item={item} mediaType={type} initialPreference={preferenceMap.get(`${item.id}-${type}`) ?? null} />
+                <MediaCard item={item} mediaType={type} initialPreference={preferenceMap.get(`${item.id}-${type}`) ?? null} onDislike={(id) => setLocalDislikes(prev => new Set(prev).add(id))} />
               </div>
             );
           })}
@@ -388,7 +398,7 @@ export default function Dashboard() {
             const type = 'title' in item ? 'movie' : 'tv';
             return (
               <div key={item.id} className="flex-shrink-0 w-40 sm:w-48 snap-start">
-                <MediaCard item={item} mediaType={type} initialPreference={preferenceMap.get(`${item.id}-${type}`) ?? null} />
+                <MediaCard item={item} mediaType={type} initialPreference={preferenceMap.get(`${item.id}-${type}`) ?? null} onDislike={(id) => setLocalDislikes(prev => new Set(prev).add(id))} />
               </div>
             );
           })}

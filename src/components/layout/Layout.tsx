@@ -3,6 +3,7 @@ import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAdmin } from '../../hooks/useAdmin';
 import { supabase } from '../../lib/supabase';
+import { checkUpcomingEpisodeNotifications } from '../../services/episodeNotifications';
 
 interface LayoutProps {
   children: ReactNode;
@@ -18,6 +19,7 @@ export function Layout({ children }: LayoutProps) {
     if (user) {
       loadPendingCount();
       loadUnreadNotifications();
+      checkUpcomingEpisodeNotifications(user.id); // fire-and-forget, once per day
 
       const recsChannel = supabase
         .channel('recommendations_changes')

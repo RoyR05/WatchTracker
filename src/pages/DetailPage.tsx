@@ -630,6 +630,11 @@ export default function DetailPage() {
                     </button>
                   )}
                 </div>
+                {!watchlistItem && (
+                  <p className="text-xs text-gray-500 pt-1 text-center">
+                    Add to your watchlist to write personal notes on this title.
+                  </p>
+                )}
 
                 {/* Plex Availability Section */}
                 <div className="flex flex-wrap items-center gap-3 pt-4 border-t border-white/20">

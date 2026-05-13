@@ -19,11 +19,12 @@ interface MediaCardProps {
   item: Movie | TVShow;
   mediaType: 'movie' | 'tv';
   initialPreference?: 'like' | 'dislike' | null;
+  onDislike?: (tmdbId: number) => void;
 }
 
 type WatchlistStatus = 'watching' | 'completed' | 'plan_to_watch' | 'dropped';
 
-export function MediaCard({ item, mediaType, initialPreference = null }: MediaCardProps) {
+export function MediaCard({ item, mediaType, initialPreference = null, onDislike }: MediaCardProps) {
   const { user } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
@@ -92,6 +93,7 @@ export function MediaCard({ item, mediaType, initialPreference = null }: MediaCa
         await preferencesService.setPreference(item.id, mediaType, 'dislike', user.id);
         setPreference('dislike');
         toast.success('Added to disliked');
+        onDislike?.(item.id);
       }
 
       if ('vibrate' in navigator) {
@@ -308,7 +310,7 @@ export function MediaCard({ item, mediaType, initialPreference = null }: MediaCa
                 <span className="text-xs font-semibold text-white">{item.vote_average.toFixed(1)}</span>
               </div>
             )}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/0 to-black/20 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/0 to-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-200 delay-300 group-hover:delay-0">
               <div className="absolute top-2 right-2 flex gap-2">
                 <button
                   onClick={(e) => {
