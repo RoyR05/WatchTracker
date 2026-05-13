@@ -12,9 +12,10 @@ interface AddToListModalProps {
   tmdbId: number;
   mediaType: 'movie' | 'tv';
   title: string;
+  watchlistNote?: string;
 }
 
-export function AddToListModal({ isOpen, onClose, tmdbId, mediaType, title }: AddToListModalProps) {
+export function AddToListModal({ isOpen, onClose, tmdbId, mediaType, title, watchlistNote }: AddToListModalProps) {
   const { user, profile } = useAuth();
   const [lists, setLists] = useState<CustomList[]>([]);
   const [listItems, setListItems] = useState<ListItem[]>([]);
@@ -22,11 +23,13 @@ export function AddToListModal({ isOpen, onClose, tmdbId, mediaType, title }: Ad
   const [updating, setUpdating] = useState<string | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newListName, setNewListName] = useState('');
+  const [listNote, setListNote] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen && user) {
       loadData();
+      setListNote(watchlistNote ?? '');
     }
   }, [isOpen, user, tmdbId, mediaType]);
 
@@ -90,6 +93,7 @@ export function AddToListModal({ isOpen, onClose, tmdbId, mediaType, title }: Ad
             list_id: listId,
             tmdb_id: tmdbId,
             media_type: mediaType,
+            notes: listNote.trim(),
           })
           .select()
           .single();
@@ -132,6 +136,7 @@ export function AddToListModal({ isOpen, onClose, tmdbId, mediaType, title }: Ad
           list_id: newList.id,
           tmdb_id: tmdbId,
           media_type: mediaType,
+          notes: listNote.trim(),
         })
         .select()
         .single();
@@ -176,6 +181,17 @@ export function AddToListModal({ isOpen, onClose, tmdbId, mediaType, title }: Ad
         </div>
 
         <p className="text-gray-400 text-sm mb-4">Select lists to add "{title}"</p>
+
+        <div className="mb-4">
+          <label className="block text-xs font-medium text-gray-400 mb-1">Note for this list entry (optional)</label>
+          <textarea
+            value={listNote}
+            onChange={e => setListNote(e.target.value)}
+            placeholder="Why is this on the list? What did you think?"
+            rows={2}
+            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm resize-none"
+          />
+        </div>
 
         {error && (
           <div className="mb-4 bg-red-900/20 border border-red-700 text-red-400 px-4 py-3 rounded-lg">

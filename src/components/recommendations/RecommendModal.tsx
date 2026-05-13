@@ -14,9 +14,10 @@ interface RecommendModalProps {
   tmdbId: number;
   mediaType: 'movie' | 'tv';
   title: string;
+  initialNote?: string;
 }
 
-export function RecommendModal({ isOpen, onClose, tmdbId, mediaType, title }: RecommendModalProps) {
+export function RecommendModal({ isOpen, onClose, tmdbId, mediaType, title, initialNote }: RecommendModalProps) {
   const { user } = useAuth();
   const [users, setUsers] = useState<Profile[]>([]);
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
@@ -29,7 +30,7 @@ export function RecommendModal({ isOpen, onClose, tmdbId, mediaType, title }: Re
     if (isOpen) {
       loadUsers();
       setSelectedUsers([]);
-      setMessage('');
+      setMessage(initialNote ?? '');
       setSearchQuery('');
     }
   }, [isOpen]);

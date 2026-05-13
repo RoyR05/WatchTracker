@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Layout } from '../components/layout/Layout';
 import { Skeleton } from '../components/ui/Skeleton';
@@ -31,6 +31,9 @@ export default function ListDetailPage() {
   const [editDescription, setEditDescription] = useState('');
   const [editPublic, setEditPublic] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editNoteText, setEditNoteText] = useState('');
+  const noteInputRef = useRef<HTMLTextAreaElement>(null);
 
   const loadList = useCallback(async () => {
     if (!id || !user) return;
@@ -149,6 +152,28 @@ export default function ListDetailPage() {
       toast.error('Failed to update list');
     } finally {
       setSaving(false);
+    }
+  }
+
+  function startEditNote(item: ListItemWithMedia) {
+    setEditingNoteId(item.id);
+    setEditNoteText(item.notes ?? '');
+    setTimeout(() => noteInputRef.current?.focus(), 50);
+  }
+
+  async function saveItemNote(itemId: string) {
+    try {
+      const { error } = await supabase
+        .from('list_items')
+        .update({ notes: editNoteText.trim() })
+        .eq('id', itemId);
+      if (error) throw error;
+      setItems(prev => prev.map(i => i.id === itemId ? { ...i, notes: editNoteText.trim() } : i));
+    } catch (error) {
+      console.error('Error saving note:', error);
+      toast.error('Failed to save note');
+    } finally {
+      setEditingNoteId(null);
     }
   }
 
@@ -366,6 +391,47 @@ export default function ListDetailPage() {
                         <p className="text-xs text-gray-400 mt-1">
                           {item.media ? getYear(item.media) : ''}
                         </p>
+                        {editingNoteId === item.id ? (
+                          <div className="mt-1.5" onClick={e => e.preventDefault()}>
+                            <textarea
+                              ref={noteInputRef}
+                              value={editNoteText}
+                              onChange={e => setEditNoteText(e.target.value)}
+                              rows={2}
+                              className="w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-xs text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-primary-500 resize-none"
+                              placeholder="Add a note..."
+                            />
+                            <div className="flex gap-1 mt-1">
+                              <button
+                                onClick={e => { e.preventDefault(); saveItemNote(item.id); }}
+                                className="text-xs px-2 py-0.5 bg-primary-600 text-white rounded"
+                              >Save</button>
+                              <button
+                                onClick={e => { e.preventDefault(); setEditingNoteId(null); }}
+                                className="text-xs px-2 py-0.5 bg-gray-700 text-gray-300 rounded"
+                              >Cancel</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="mt-1 flex items-start gap-1 min-h-[1rem]">
+                            {item.notes && item.notes.trim() ? (
+                              <p className="text-xs text-gray-400 italic line-clamp-2 flex-1">{item.notes}</p>
+                            ) : isOwner ? (
+                              <span className="text-xs text-gray-600 italic flex-1">No note</span>
+                            ) : null}
+                            {isOwner && (
+                              <button
+                                onClick={e => { e.preventDefault(); startEditNote(item); }}
+                                className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-gray-500 hover:text-primary-400"
+                                title="Edit note"
+                              >
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                </svg>
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </>
                     )}
                   </div>

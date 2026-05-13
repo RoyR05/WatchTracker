@@ -187,6 +187,11 @@ export default function WatchlistPage() {
                         <p className="text-sm text-gray-400">
                           {item.media_year ?? '—'} · {item.media_type === 'movie' ? 'Movie' : 'TV Show'}
                         </p>
+                        {item.notes && item.notes.trim() && (
+                          <p className="text-xs text-gray-400 italic mt-0.5 line-clamp-1">
+                            {item.notes}
+                          </p>
+                        )}
                       </div>
                       <span className={`flex-shrink-0 px-2.5 py-1 rounded-full text-xs font-medium border ${cfg?.color ?? ''}`}>
                         {cfg?.label ?? item.status}

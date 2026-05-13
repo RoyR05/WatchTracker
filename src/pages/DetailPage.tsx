@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react';
+﻿﻿﻿﻿﻿﻿import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Layout } from '../components/layout/Layout';
@@ -70,6 +70,21 @@ export default function DetailPage() {
   const [plexRequest, setPlexRequest] = useState<PlexRequest | null>(null);
   const [plexSubmitting, setPlexSubmitting] = useState(false);
 
+  // Notes
+  const [noteText, setNoteText] = useState('');
+  const [noteIsPrivate, setNoteIsPrivate] = useState(false);
+  const [noteSaving, setNoteSaving] = useState(false);
+
+  interface FriendNote {
+    user_id: string;
+    username: string;
+    avatar_url: string | null;
+    notes: string;
+    status: string;
+    updated_at: string;
+  }
+  const [friendsNotes, setFriendsNotes] = useState<FriendNote[]>([]);
+
   useEffect(() => {
     if (!id || !mediaType || !user) return;
     Promise.all([
@@ -88,6 +103,41 @@ export default function DetailPage() {
       if (existingRequest) setPlexRequest(existingRequest);
     });
   }, [id, mediaType, user]);
+
+  // Sync note text/privacy when watchlistItem loads or changes
+  useEffect(() => {
+    if (watchlistItem) {
+      setNoteText(watchlistItem.notes ?? '');
+      setNoteIsPrivate(watchlistItem.note_is_private ?? false);
+    }
+  }, [watchlistItem?.id]);
+
+  // Load friends' notes
+  useEffect(() => {
+    if (!tmdbId || !mediaType) return;
+    supabase.rpc('get_friends_notes', { p_tmdb_id: tmdbId, p_media_type: mediaType })
+      .then(({ data }) => { if (data) setFriendsNotes(data as FriendNote[]); });
+  }, [tmdbId, mediaType]);
+
+  async function saveNote() {
+    if (!watchlistItem) return;
+    setNoteSaving(true);
+    try {
+      await supabase.from('watchlist_items')
+        .update({ notes: noteText, note_is_private: noteIsPrivate, updated_at: new Date().toISOString() })
+        .eq('id', watchlistItem.id);
+    } finally { setNoteSaving(false); }
+  }
+
+  async function toggleNotePrivacy() {
+    const newVal = !noteIsPrivate;
+    setNoteIsPrivate(newVal);
+    if (watchlistItem) {
+      await supabase.from('watchlist_items')
+        .update({ note_is_private: newVal, updated_at: new Date().toISOString() })
+        .eq('id', watchlistItem.id);
+    }
+  }
 
   function buildContentMetadata() {
     if (!details) return undefined;
@@ -737,6 +787,71 @@ export default function DetailPage() {
 
         <div className="bg-gray-900 px-4 sm:px-6 lg:px-8">
           <div className="max-w-7xl mx-auto py-8">
+            {/* My Note */}
+            {watchlistItem && (
+              <div className="mb-8 bg-gray-800 rounded-xl p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-lg font-semibold text-white">My Note</h2>
+                  <button
+                    onClick={toggleNotePrivacy}
+                    className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                      noteIsPrivate
+                        ? 'bg-gray-700 border-gray-600 text-gray-400 hover:border-gray-500'
+                        : 'bg-green-900/30 border-green-700 text-green-400 hover:border-green-600'
+                    }`}
+                    title={noteIsPrivate ? 'Private — click to share with friends' : 'Shared with friends — click to make private'}
+                  >
+                    {noteIsPrivate ? (
+                      <><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg><span>Private</span></>
+                    ) : (
+                      <><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg><span>Shared</span></>
+                    )}
+                  </button>
+                </div>
+                <textarea
+                  value={noteText}
+                  onChange={e => setNoteText(e.target.value)}
+                  placeholder="Add your thoughts about this title..."
+                  rows={3}
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm resize-none mb-3"
+                />
+                <button
+                  onClick={saveNote}
+                  disabled={noteSaving}
+                  className="px-4 py-1.5 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors"
+                >
+                  {noteSaving ? 'Saving…' : 'Save Note'}
+                </button>
+              </div>
+            )}
+
+            {/* Friends' Notes */}
+            {friendsNotes.length > 0 && (
+              <div className="mb-8">
+                <h2 className="text-lg font-semibold text-white mb-3">Friends' Notes</h2>
+                <div className="space-y-3">
+                  {friendsNotes.map(fn => (
+                    <div key={fn.user_id} className="bg-gray-800 rounded-xl p-4 flex gap-3">
+                      <div className="flex-shrink-0 w-9 h-9 rounded-full bg-gray-700 flex items-center justify-center overflow-hidden">
+                        {fn.avatar_url ? (
+                          <img src={fn.avatar_url} alt={fn.username} className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-sm font-semibold text-gray-300">{fn.username.charAt(0).toUpperCase()}</span>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-sm font-medium text-white">{fn.username}</span>
+                          <span className="text-xs text-gray-500">{new Date(fn.updated_at).toLocaleDateString()}</span>
+                        </div>
+                        <p className="text-sm text-gray-300 whitespace-pre-wrap">{fn.notes}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {cast.length > 0 && (
               <div className="mb-8">
                 <div className="flex items-center justify-between mb-6">
@@ -798,6 +913,7 @@ export default function DetailPage() {
         tmdbId={details.id}
         mediaType={mediaType!}
         title={title}
+        watchlistNote={noteText}
       />
 
       <RecommendModal
@@ -806,9 +922,11 @@ export default function DetailPage() {
         tmdbId={details.id}
         mediaType={mediaType!}
         title={title}
+        initialNote={noteText}
       />
     </Layout>
   );
 }
+
 
 
