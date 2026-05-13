@@ -140,16 +140,19 @@ export const plexService = {
   },
 
   async checkExistingRequest(tmdbId: number, mediaType: 'movie' | 'tv'): Promise<PlexRequest | null> {
+    // Use limit(1) not .maybeSingle() — the unique index only covers pending/approved,
+    // so bad_file rows can coexist and would cause maybeSingle() to throw.
     const { data, error } = await supabase
       .from('plex_requests')
       .select('*')
       .eq('tmdb_id', tmdbId)
       .eq('media_type', mediaType)
       .in('status', ['pending', 'approved', 'bad_file'])
-      .maybeSingle();
+      .order('created_at', { ascending: false })
+      .limit(1);
 
     if (error) throw error;
-    return data as PlexRequest | null;
+    return (data?.[0] ?? null) as PlexRequest | null;
   },
 
   async getMyRequests(userId: string): Promise<PlexRequest[]> {

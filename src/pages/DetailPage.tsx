@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿import { useEffect, useState } from 'react';
+﻿﻿﻿﻿﻿﻿﻿﻿import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Layout } from '../components/layout/Layout';
@@ -637,43 +637,31 @@ export default function DetailPage() {
                     <>
                       <button
                         onClick={handleCheckPlex}
-                        className="flex items-center gap-2 px-4 py-2 rounded-md bg-amber-600/20 text-amber-200 hover:bg-amber-600/40 font-medium transition-all backdrop-blur-sm"
-                      >
+                        className="flex items-center gap-2 px-4 py-2 rounded-md bg-amber-600/20 text-amber-200 hover:bg-amber-600/40 font-medium transition-all backdrop-blur-sm">
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2" />
                         </svg>
                         Check on Plex
                       </button>
-                      {!plexRequest && user && (
-                        <button
-                          onClick={handlePlexRequest}
-                          disabled={plexSubmitting}
-                          className="flex items-center gap-2 px-4 py-2 rounded-md bg-white/10 text-white/70 hover:bg-white/20 font-medium transition-all backdrop-blur-sm text-sm"
-                        >
-                          {plexSubmitting ? (
-                            <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white/60"></div>
-                          ) : (
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                            </svg>
-                          )}
-                          Request to Add
-                        </button>
-                      )}
                       {plexRequest && (
-                        <span className={`px-3 py-2 rounded-md text-sm font-medium backdrop-blur-sm ${
-                          plexRequest.status === 'pending' ? 'bg-yellow-600/30 text-yellow-200' :
-                          plexRequest.status === 'approved' ? 'bg-blue-600/30 text-blue-200' :
-                          plexRequest.status === 'added' ? 'bg-green-600/30 text-green-200' :
-                          plexRequest.status === 'bad_file' ? 'bg-orange-600/30 text-orange-200' :
-                          'bg-red-600/30 text-red-200'
-                        }`}>
-                          {plexRequest.status === 'pending' && 'Requested — Pending'}
-                          {plexRequest.status === 'approved' && 'Request Approved'}
-                          {plexRequest.status === 'added' && 'Added to Plex'}
-                          {plexRequest.status === 'bad_file' && 'Bad File Reported'}
-                          {plexRequest.status === 'rejected' && 'Request Rejected'}
-                        </span>
+                        <div className="flex flex-col gap-0.5">
+                          <span className={`px-3 py-2 rounded-md text-sm font-medium backdrop-blur-sm ${
+                            plexRequest.status === 'pending' ? 'bg-yellow-600/30 text-yellow-200' :
+                            plexRequest.status === 'approved' ? 'bg-blue-600/30 text-blue-200' :
+                            plexRequest.status === 'added' ? 'bg-green-600/30 text-green-200' :
+                            plexRequest.status === 'bad_file' ? 'bg-orange-600/30 text-orange-200' :
+                            'bg-red-600/30 text-red-200'
+                          }`}>
+                            {plexRequest.status === 'pending' && 'Requested — Pending'}
+                            {plexRequest.status === 'approved' && 'Request Approved'}
+                            {plexRequest.status === 'added' && 'Added to Plex'}
+                            {plexRequest.status === 'bad_file' && 'Bad File Reported'}
+                            {plexRequest.status === 'rejected' && 'Request Rejected'}
+                          </span>
+                          {plexRequest.admin_notes && (
+                            <p className="text-xs text-white/50 italic px-1">"{plexRequest.admin_notes}"</p>
+                          )}
+                        </div>
                       )}
                     </>
                   )}
@@ -703,6 +691,11 @@ export default function DetailPage() {
                           </span>
                         )}
                       </div>
+                      {mediaType === 'tv' && (
+                        <p className="text-xs text-white/40 italic">
+                          Note: not all seasons may be available — use Report Bad File if a season is missing.
+                        </p>
+                      )}
                       {!plexRequest && (
                         <button
                           onClick={handleReportBadFile}
@@ -712,7 +705,7 @@ export default function DetailPage() {
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
                           </svg>
-                          Report Bad File
+                          Report Bad / Incomplete File
                         </button>
                       )}
                       {plexRequest?.status === 'bad_file' && (
@@ -753,17 +746,22 @@ export default function DetailPage() {
                         </button>
                       )}
                       {plexRequest && (
-                        <span className={`px-3 py-2 rounded-md text-sm font-medium backdrop-blur-sm ${
-                          plexRequest.status === 'pending' ? 'bg-yellow-600/30 text-yellow-200' :
-                          plexRequest.status === 'approved' ? 'bg-blue-600/30 text-blue-200' :
-                          plexRequest.status === 'added' ? 'bg-green-600/30 text-green-200' :
-                          'bg-red-600/30 text-red-200'
-                        }`}>
-                          {plexRequest.status === 'pending' && 'Requested - Pending'}
-                          {plexRequest.status === 'approved' && 'Request Approved'}
-                          {plexRequest.status === 'added' && 'Added to Plex'}
-                          {plexRequest.status === 'rejected' && 'Request Rejected'}
-                        </span>
+                        <div className="flex flex-col gap-0.5">
+                          <span className={`px-3 py-2 rounded-md text-sm font-medium backdrop-blur-sm ${
+                            plexRequest.status === 'pending' ? 'bg-yellow-600/30 text-yellow-200' :
+                            plexRequest.status === 'approved' ? 'bg-blue-600/30 text-blue-200' :
+                            plexRequest.status === 'added' ? 'bg-green-600/30 text-green-200' :
+                            'bg-red-600/30 text-red-200'
+                          }`}>
+                            {plexRequest.status === 'pending' && 'Requested — Pending'}
+                            {plexRequest.status === 'approved' && 'Request Approved'}
+                            {plexRequest.status === 'added' && 'Added to Plex'}
+                            {plexRequest.status === 'rejected' && 'Request Rejected'}
+                          </span>
+                          {plexRequest.admin_notes && (
+                            <p className="text-xs text-white/50 italic px-1">"{plexRequest.admin_notes}"</p>
+                          )}
+                        </div>
                       )}
                     </>
                   )}
@@ -923,6 +921,7 @@ export default function DetailPage() {
         mediaType={mediaType!}
         title={title}
         initialNote={noteText}
+        plexAvailability={plexAvailability}
       />
     </Layout>
   );

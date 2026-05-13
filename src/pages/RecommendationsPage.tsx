@@ -42,6 +42,19 @@ export default function RecommendationsPage() {
   const [updating, setUpdating] = useState<string | null>(null);
 
   useEffect(() => {
+    if (user) {
+      // Mark all unread recommendation notifications as read when this page is visited
+      supabase
+        .from('notifications')
+        .update({ is_read: true })
+        .eq('user_id', user.id)
+        .eq('notification_type', 'recommendation')
+        .eq('is_read', false)
+        .then(() => {});
+    }
+  }, [user]);
+
+  useEffect(() => {
     loadRecommendations();
   }, [user, activeTab]);
 

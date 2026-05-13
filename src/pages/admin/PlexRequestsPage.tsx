@@ -25,6 +25,8 @@ export default function AdminPlexRequestsPage() {
   const [actioningId, setActioningId] = useState<string | null>(null);
   const [rejectNotes, setRejectNotes] = useState<Record<string, string>>({});
   const [showRejectInput, setShowRejectInput] = useState<string | null>(null);
+  const [addedNotes, setAddedNotes] = useState<Record<string, string>>({});
+  const [showAddedOptions, setShowAddedOptions] = useState<string | null>(null);
 
   useEffect(() => {
     loadRequests();
@@ -186,52 +188,124 @@ export default function AdminPlexRequestsPage() {
                     </div>
 
                     {(request.status === 'pending' || request.status === 'approved' || request.status === 'bad_file') && (
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        {request.status === 'pending' && (
-                          <button
-                            onClick={() => handleAction(request.id, 'approved')}
-                            disabled={isActioning}
-                            className="px-3 py-1.5 rounded-md bg-blue-600/30 text-blue-200 hover:bg-blue-600/50 text-xs font-medium transition-colors"
-                          >
-                            Approve
-                          </button>
-                        )}
-                        {(request.status === 'pending' || request.status === 'approved') && (
-                          <button
-                            onClick={() => handleAction(request.id, 'added')}
-                            disabled={isActioning}
-                            className="px-3 py-1.5 rounded-md bg-green-600/30 text-green-200 hover:bg-green-600/50 text-xs font-medium transition-colors"
-                          >
-                            Mark Added
-                          </button>
-                        )}
-                        {request.status === 'bad_file' && (
-                          <button
-                            onClick={() => handleAction(request.id, 'added')}
-                            disabled={isActioning}
-                            className="px-3 py-1.5 rounded-md bg-green-600/30 text-green-200 hover:bg-green-600/50 text-xs font-medium transition-colors"
-                          >
-                            Resolved
-                          </button>
-                        )}
-                        {request.status === 'pending' && (
-                          <>
-                            {showRejectInput === request.id ? (
-                              <div className="flex items-center gap-2">
+                      <div className="flex flex-col gap-2 flex-shrink-0 items-end">
+                        <div className="flex items-center gap-2">
+                          {request.status === 'pending' && (
+                            <button
+                              onClick={() => handleAction(request.id, 'approved')}
+                              disabled={isActioning}
+                              className="px-3 py-1.5 rounded-md bg-blue-600/30 text-blue-200 hover:bg-blue-600/50 text-xs font-medium transition-colors"
+                            >
+                              Approve
+                            </button>
+                          )}
+
+                          {/* Mark Added / Resolved with canned response */}
+                          {(request.status === 'pending' || request.status === 'approved' || request.status === 'bad_file') && (
+                            showAddedOptions === request.id ? (
+                              <div className="flex flex-col gap-1.5 bg-gray-700/80 rounded-lg p-2 min-w-48">
+                                <p className="text-xs text-gray-300 font-medium mb-0.5">Response to user:</p>
+                                {[
+                                  'Added to Plex — enjoy!',
+                                  'Added. May take a few minutes to appear.',
+                                  request.status === 'bad_file' ? 'Bad file has been replaced.' : null,
+                                ].filter(Boolean).map(msg => (
+                                  <button
+                                    key={msg}
+                                    onClick={() => setAddedNotes(prev => ({ ...prev, [request.id]: msg! }))}
+                                    className={`text-left px-2 py-1 rounded text-xs transition-colors ${
+                                      addedNotes[request.id] === msg
+                                        ? 'bg-green-600/40 text-green-200'
+                                        : 'bg-gray-600/50 text-gray-300 hover:bg-gray-600'
+                                    }`}
+                                  >
+                                    {msg}
+                                  </button>
+                                ))}
                                 <input
                                   type="text"
-                                  placeholder="Reason (optional)"
+                                  placeholder="Custom message…"
+                                  value={addedNotes[request.id] || ''}
+                                  onChange={e => setAddedNotes(prev => ({ ...prev, [request.id]: e.target.value }))}
+                                  className="px-2 py-1 rounded bg-gray-600 border border-gray-500 text-white text-xs focus:outline-none focus:border-green-500"
+                                />
+                                <div className="flex gap-1.5 mt-0.5">
+                                  <button
+                                    onClick={() => {
+                                      handleAction(request.id, 'added', addedNotes[request.id]);
+                                      setShowAddedOptions(null);
+                                    }}
+                                    disabled={isActioning}
+                                    className="flex-1 px-2 py-1 rounded-md bg-green-600/40 text-green-200 hover:bg-green-600/60 text-xs font-medium transition-colors"
+                                  >
+                                    Confirm Added
+                                  </button>
+                                  <button
+                                    onClick={() => setShowAddedOptions(null)}
+                                    className="px-2 py-1 rounded-md bg-gray-600 text-gray-300 hover:bg-gray-500 text-xs transition-colors"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => setShowAddedOptions(request.id)}
+                                disabled={isActioning}
+                                className="px-3 py-1.5 rounded-md bg-green-600/30 text-green-200 hover:bg-green-600/50 text-xs font-medium transition-colors"
+                              >
+                                {request.status === 'bad_file' ? 'Mark Resolved' : 'Mark Added'}
+                              </button>
+                            )
+                          )}
+
+                          {/* Reject with canned response */}
+                          {request.status === 'pending' && (
+                            showRejectInput === request.id ? (
+                              <div className="flex flex-col gap-1.5 bg-gray-700/80 rounded-lg p-2 min-w-48">
+                                <p className="text-xs text-gray-300 font-medium mb-0.5">Reason for rejection:</p>
+                                {[
+                                  'Not yet released on home video.',
+                                  'Already available — check your library.',
+                                  'Content not available for licensing reasons.',
+                                ].map(msg => (
+                                  <button
+                                    key={msg}
+                                    onClick={() => setRejectNotes(prev => ({ ...prev, [request.id]: msg }))}
+                                    className={`text-left px-2 py-1 rounded text-xs transition-colors ${
+                                      rejectNotes[request.id] === msg
+                                        ? 'bg-red-600/40 text-red-200'
+                                        : 'bg-gray-600/50 text-gray-300 hover:bg-gray-600'
+                                    }`}
+                                  >
+                                    {msg}
+                                  </button>
+                                ))}
+                                <input
+                                  type="text"
+                                  placeholder="Custom reason…"
                                   value={rejectNotes[request.id] || ''}
                                   onChange={e => setRejectNotes(prev => ({ ...prev, [request.id]: e.target.value }))}
-                                  className="px-2 py-1 rounded bg-gray-700 border border-gray-600 text-white text-xs w-40 focus:outline-none focus:border-amber-500"
+                                  className="px-2 py-1 rounded bg-gray-600 border border-gray-500 text-white text-xs focus:outline-none focus:border-red-500"
                                 />
-                                <button
-                                  onClick={() => handleAction(request.id, 'rejected', rejectNotes[request.id])}
-                                  disabled={isActioning}
-                                  className="px-3 py-1.5 rounded-md bg-red-600/30 text-red-200 hover:bg-red-600/50 text-xs font-medium transition-colors"
-                                >
-                                  Confirm
-                                </button>
+                                <div className="flex gap-1.5 mt-0.5">
+                                  <button
+                                    onClick={() => {
+                                      handleAction(request.id, 'rejected', rejectNotes[request.id]);
+                                      setShowRejectInput(null);
+                                    }}
+                                    disabled={isActioning}
+                                    className="flex-1 px-2 py-1 rounded-md bg-red-600/40 text-red-200 hover:bg-red-600/60 text-xs font-medium transition-colors"
+                                  >
+                                    Confirm Reject
+                                  </button>
+                                  <button
+                                    onClick={() => setShowRejectInput(null)}
+                                    className="px-2 py-1 rounded-md bg-gray-600 text-gray-300 hover:bg-gray-500 text-xs transition-colors"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
                               </div>
                             ) : (
                               <button
@@ -240,9 +314,9 @@ export default function AdminPlexRequestsPage() {
                               >
                                 Reject
                               </button>
-                            )}
-                          </>
-                        )}
+                            )
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
