@@ -18,40 +18,51 @@ Deno.serve(async (req: Request) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
 
     const authHeader = req.headers.get('Authorization');
-    if (!authHeader) return new Response(JSON.stringify({ error: 'Missing authorization' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: 'Missing authorization' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
 
-    // Verify caller is authenticated
-    const userClient = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: authHeader } },
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
-    const { data: { user: caller }, error: authError } = await userClient.auth.getUser();
-    if (authError || !caller) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-
-    // Verify caller is admin
+    // Verify caller's JWT using the service key client (more reliable than userClient pattern)
     const adminClient = createClient(supabaseUrl, serviceKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
+
+    const jwt = authHeader.replace('Bearer ', '');
+    const { data: { user: caller }, error: authError } = await adminClient.auth.getUser(jwt);
+    if (authError || !caller) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    // Verify caller is admin
     const { data: adminCheck } = await adminClient.from('admin_config').select('admin_user_id').eq('admin_user_id', caller.id).maybeSingle();
-    if (!adminCheck) return new Response(JSON.stringify({ error: 'Access denied: admin only' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    if (!adminCheck) {
+      return new Response(JSON.stringify({ error: 'Access denied: admin only' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
 
     const { user_id } = await req.json();
-    if (!user_id) return new Response(JSON.stringify({ error: 'user_id is required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-    if (user_id === caller.id) return new Response(JSON.stringify({ error: 'You cannot delete your own account' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    if (!user_id) {
+      return new Response(JSON.stringify({ error: 'user_id is required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    if (user_id === caller.id) {
+      return new Response(JSON.stringify({ error: 'You cannot delete your own account' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
 
-    // Delete user data first (in case FK doesn't cascade)
+    // Delete related data first (in case FK constraints don't cascade)
     await adminClient.from('watchlist_items').delete().eq('user_id', user_id);
     await adminClient.from('user_preferences').delete().eq('user_id', user_id);
+    await adminClient.from('notifications').delete().eq('user_id', user_id);
+    await adminClient.from('recommendations').delete().or(`from_user_id.eq.${user_id},to_user_id.eq.${user_id}`);
     await adminClient.from('global_share_permissions').delete().eq('user_id', user_id);
     await adminClient.from('global_share_permissions').delete().eq('can_share_with_user_id', user_id);
     await adminClient.from('profiles').delete().eq('id', user_id);
 
-    // Delete auth user
+    // Delete the auth user
     const { error: deleteError } = await adminClient.auth.admin.deleteUser(user_id);
-    if (deleteError) return new Response(JSON.stringify({ error: deleteError.message }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    if (deleteError) {
+      return new Response(JSON.stringify({ error: deleteError.message }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
 
     await adminClient.rpc('log_admin_action', {
       p_action_type: 'user_deleted',
