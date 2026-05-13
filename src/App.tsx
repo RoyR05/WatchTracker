@@ -16,7 +16,6 @@ import ProfilePage from './pages/ProfilePage';
 import ListsPage from './pages/ListsPage';
 import ListDetailPage from './pages/ListDetailPage';
 import CalendarPage from './pages/CalendarPage';
-import SocialPage from './pages/SocialPage';
 import RecommendationsPage from './pages/RecommendationsPage';
 import { PersonPage } from './pages/PersonPage';
 import { NotificationsPage } from './pages/NotificationsPage';
@@ -51,7 +50,6 @@ function AnimatedRoutes() {
         <Route path="/lists" element={<ProtectedRoute><PageTransition><ListsPage /></PageTransition></ProtectedRoute>} />
         <Route path="/lists/:id" element={<ProtectedRoute><PageTransition><ListDetailPage /></PageTransition></ProtectedRoute>} />
         <Route path="/calendar" element={<ProtectedRoute><PageTransition><CalendarPage /></PageTransition></ProtectedRoute>} />
-        <Route path="/social" element={<ProtectedRoute><PageTransition><SocialPage /></PageTransition></ProtectedRoute>} />
         <Route path="/recommendations" element={<ProtectedRoute><PageTransition><RecommendationsPage /></PageTransition></ProtectedRoute>} />
         <Route path="/notifications" element={<ProtectedRoute><PageTransition><NotificationsPage /></PageTransition></ProtectedRoute>} />
         <Route path="/watchlist" element={<ProtectedRoute><PageTransition><WatchlistPage /></PageTransition></ProtectedRoute>} />

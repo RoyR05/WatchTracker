@@ -114,5 +114,17 @@ export const userSettingsService = {
   async getEnglishOnlyFilter(): Promise<boolean> {
     const settings = await this.getSettings();
     return settings?.english_only_filter ?? false;
+  },
+
+  async getPreferredGenres(): Promise<number[]> {
+    const settings = await this.getSettings();
+    const raw = (settings as any)?.preferred_genres;
+    return Array.isArray(raw) ? (raw as number[]) : [];
+  },
+
+  async setPreferredGenres(genres: number[]): Promise<{ success: boolean; error?: string }> {
+    // Clear cache so next getSettings() reads fresh value
+    cachedSettings = null;
+    return this.updateSettings({ preferred_genres: genres } as any);
   }
 };

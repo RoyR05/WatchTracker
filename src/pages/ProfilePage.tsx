@@ -1,9 +1,29 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Layout } from '../components/layout/Layout';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import ChangePassword from '../components/profile/ChangePassword';
+import { userSettingsService } from '../services/userSettings';
+
+const AVAILABLE_GENRES = [
+  { id: 28,    name: 'Action' },
+  { id: 12,    name: 'Adventure' },
+  { id: 16,    name: 'Animation' },
+  { id: 35,    name: 'Comedy' },
+  { id: 80,    name: 'Crime' },
+  { id: 99,    name: 'Documentary' },
+  { id: 18,    name: 'Drama' },
+  { id: 14,    name: 'Fantasy' },
+  { id: 36,    name: 'History' },
+  { id: 27,    name: 'Horror' },
+  { id: 10402, name: 'Music' },
+  { id: 9648,  name: 'Mystery' },
+  { id: 10749, name: 'Romance' },
+  { id: 878,   name: 'Sci-Fi' },
+  { id: 53,    name: 'Thriller' },
+  { id: 10752, name: 'War' },
+];
 
 export default function ProfilePage() {
   const { user, profile, updateProfile } = useAuth();
@@ -17,6 +37,38 @@ export default function ProfilePage() {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Discovery preferences
+  const [englishOnly, setEnglishOnly] = useState(false);
+  const [preferredGenres, setPreferredGenres] = useState<number[]>([]);
+  const genreSaveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    userSettingsService.getEnglishOnlyFilter().then(setEnglishOnly);
+    userSettingsService.getPreferredGenres().then(setPreferredGenres);
+  }, []);
+
+  async function toggleEnglishOnly() {
+    const newValue = !englishOnly;
+    setEnglishOnly(newValue);
+    await userSettingsService.setEnglishOnlyFilter(newValue);
+  }
+
+  const toggleGenre = useCallback((genreId: number) => {
+    setPreferredGenres(prev => {
+      const next = prev.includes(genreId)
+        ? prev.filter(g => g !== genreId)
+        : [...prev, genreId];
+
+      // Auto-save after 500ms debounce
+      if (genreSaveTimeout.current) clearTimeout(genreSaveTimeout.current);
+      genreSaveTimeout.current = setTimeout(() => {
+        userSettingsService.setPreferredGenres(next);
+      }, 500);
+
+      return next;
+    });
+  }, []);
 
   async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -226,6 +278,59 @@ export default function ProfilePage() {
           </div>
 
           <ChangePassword />
+
+          {/* Discovery Preferences */}
+          <div className="bg-gray-800 rounded-lg p-6">
+            <h2 className="text-lg font-semibold text-white mb-4">Discovery Preferences</h2>
+
+            {/* English Only toggle */}
+            <div className="flex items-center justify-between py-3 border-b border-gray-700">
+              <div>
+                <p className="text-white font-medium">English Only</p>
+                <p className="text-sm text-gray-400 mt-0.5">
+                  Only show movies and shows in English. Applies to Discovery, Trending, and Feeling Lucky.
+                </p>
+              </div>
+              <button
+                onClick={toggleEnglishOnly}
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${
+                  englishOnly ? 'bg-primary-600' : 'bg-gray-600'
+                }`}
+              >
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  englishOnly ? 'translate-x-6' : 'translate-x-1'
+                }`} />
+              </button>
+            </div>
+
+            {/* Genre chips */}
+            <div className="pt-4">
+              <p className="text-white font-medium mb-1">Favorite Genres</p>
+              <p className="text-sm text-gray-400 mb-3">
+                Used to personalize Feeling Lucky and Discovery results. Combined with your likes/dislikes.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {AVAILABLE_GENRES.map(g => (
+                  <button
+                    key={g.id}
+                    onClick={() => toggleGenre(g.id)}
+                    className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+                      preferredGenres.includes(g.id)
+                        ? 'bg-primary-600 border-primary-500 text-white'
+                        : 'bg-gray-900 border-gray-700 text-gray-300 hover:border-gray-500'
+                    }`}
+                  >
+                    {g.name}
+                  </button>
+                ))}
+              </div>
+              {preferredGenres.length > 0 && (
+                <p className="text-xs text-gray-500 mt-3">
+                  {preferredGenres.length} genre{preferredGenres.length !== 1 ? 's' : ''} selected — saved automatically
+                </p>
+              )}
+            </div>
+          </div>
 
           <div className="bg-gray-800 rounded-lg p-6">
             <h2 className="text-lg font-semibold text-white mb-4">Plex</h2>

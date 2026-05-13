@@ -77,12 +77,18 @@ export const FeelingLucky = () => {
       prefs.filter(p => p.preference_type === 'like')
     );
 
-    // Build genre weight map from liked content_metadata
+    // Build genre weight map from liked content_metadata (weight +1 per liked title)
     const genreWeights = new Map<number, number>();
     for (const pref of liked) {
       for (const g of pref.content_metadata?.genres ?? []) {
         genreWeights.set(g.id, (genreWeights.get(g.id) ?? 0) + 1);
       }
+    }
+
+    // Explicit genre preferences from Profile page add +2 each (stronger signal)
+    const explicitGenres = await userSettingsService.getPreferredGenres();
+    for (const gId of explicitGenres) {
+      genreWeights.set(gId, (genreWeights.get(gId) ?? 0) + 2);
     }
 
     for (let i = 0; i < count; i++) {

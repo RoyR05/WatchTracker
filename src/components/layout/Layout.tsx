@@ -191,18 +191,6 @@ export function Layout({ children }: LayoutProps) {
                     </span>
                   )}
                 </NavLink>
-                <NavLink
-                  to="/social"
-                  className={({ isActive }) =>
-                    `px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                      isActive
-                        ? 'bg-gray-900 text-white'
-                        : 'text-gray-300 hover:bg-gray-700 hover:text-white'
-                    }`
-                  }
-                >
-                  Social
-                </NavLink>
               </div>
             </div>
             <div className="flex items-center space-x-4">
