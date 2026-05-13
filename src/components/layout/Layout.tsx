@@ -291,17 +291,22 @@ export function Layout({ children }: LayoutProps) {
             <span className="text-xs mt-1">Home</span>
           </NavLink>
           <NavLink
-            to="/discovery"
+            to="/notifications"
             className={({ isActive }) =>
-              `flex-1 flex flex-col items-center justify-center py-3 ${
+              `flex-1 flex flex-col items-center justify-center py-3 relative ${
                 isActive ? 'text-primary-500' : 'text-gray-400'
               }`
             }
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
             </svg>
-            <span className="text-xs mt-1">Discover</span>
+            {unreadNotifications > 0 && (
+              <span className="absolute top-1 right-1/4 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
+                {unreadNotifications > 9 ? '9+' : unreadNotifications}
+              </span>
+            )}
+            <span className="text-xs mt-1">Alerts</span>
           </NavLink>
           <NavLink
             to="/search"
