@@ -451,7 +451,7 @@ export default function DetailPage() {
                     {formattedDate && (
                       <>
                         <span>{formattedDate}</span>
-                        <span className="text-white/40">â€¢</span>
+                        <span className="text-white/40">·</span>
                       </>
                     )}
                     <div className="flex flex-wrap items-center gap-1">
@@ -464,7 +464,7 @@ export default function DetailPage() {
                     </div>
                     {'runtime' in details && details.runtime > 0 && (
                       <>
-                        <span className="text-white/40">â€¢</span>
+                        <span className="text-white/40">·</span>
                         <span>{formatRuntime(details.runtime)}</span>
                       </>
                     )}
