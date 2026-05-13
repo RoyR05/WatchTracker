@@ -1,21 +1,24 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.39.3";
 
-const ALLOWED_ORIGIN = Deno.env.get('SITE_URL') ?? '*';
-const corsHeaders = {
-  "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers":
-    "Content-Type, Authorization, X-Client-Info, Apikey",
-};
+function getCorsHeaders(req: Request) {
+  const origin = req.headers.get('origin') ?? '';
+  const siteUrl = Deno.env.get('SITE_URL') ?? '';
+  const isAllowed = origin === siteUrl || origin.endsWith('.vercel.app') || origin.startsWith('http://localhost');
+  return {
+    'Access-Control-Allow-Origin': isAllowed ? origin : (siteUrl || '*'),
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Client-Info, Apikey',
+  };
+}
 
 const PLEX_CLIENT_ID = "watchtracker-plex-proxy";
 const CACHE_TTL_MS = 10 * 60 * 1000;
 
-function jsonResponse(data: unknown, status = 200) {
-  return new Response(JSON.stringify(data), {
+function makeJsonResponse(cors: Record<string, string>) {
+  return (data: unknown, status = 200) => new Response(JSON.stringify(data), {
     status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: { ...cors, "Content-Type": "application/json" },
   });
 }
 
@@ -203,6 +206,9 @@ function findBestMatch(
 }
 
 Deno.serve(async (req: Request) => {
+  const corsHeaders = getCorsHeaders(req);
+  const jsonResponse = makeJsonResponse(corsHeaders);
+
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
