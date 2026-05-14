@@ -124,26 +124,21 @@ export function EpisodeTracker({ tvId, numberOfSeasons }: EpisodeTrackerProps) {
     if (!user) return;
 
     try {
-      const existing = progress.find(p => p.episode_number === episodeNumber);
-
-      if (existing) {
-        const updateData: any = { watched, watched_at: watched ? new Date().toISOString() : null };
-        await supabase
-          .from('tv_show_progress')
-          .update(updateData)
-          .eq('id', existing.id);
-      } else {
-        await supabase
-          .from('tv_show_progress')
-          .insert([{
+      const { error: upsertError } = await supabase
+        .from('tv_show_progress')
+        .upsert(
+          {
             user_id: user.id,
             tmdb_id: tvId,
             season_number: selectedSeason,
             episode_number: episodeNumber,
             watched,
             watched_at: watched ? new Date().toISOString() : null,
-          }]);
-      }
+          },
+          { onConflict: 'user_id,tmdb_id,season_number,episode_number' }
+        );
+
+      if (upsertError) throw upsertError;
 
       if (watched && autoMarkEnabled) {
         await autoMarkConsecutiveEpisodes(episodeNumber);
@@ -174,26 +169,23 @@ export function EpisodeTracker({ tvId, numberOfSeasons }: EpisodeTrackerProps) {
           ep => ep.episode_number >= firstUnwatchedBefore.episode_number && ep.episode_number < markedEpisode
         );
 
-        for (const episode of episodesToMark) {
-          const existing = progress.find(p => p.episode_number === episode.episode_number);
-          if (existing) {
-            await supabase
-              .from('tv_show_progress')
-              .update({ watched: true, watched_at: new Date().toISOString() })
-              .eq('id', existing.id);
-          } else {
-            await supabase
-              .from('tv_show_progress')
-              .insert([{
-                user_id: user.id,
-                tmdb_id: tvId,
-                season_number: selectedSeason,
-                episode_number: episode.episode_number,
-                watched: true,
-                watched_at: new Date().toISOString(),
-              }]);
-          }
-        }
+        if (episodesToMark.length === 0) return;
+
+        const now = new Date().toISOString();
+        const rows = episodesToMark.map(ep => ({
+          user_id: user.id,
+          tmdb_id: tvId,
+          season_number: selectedSeason,
+          episode_number: ep.episode_number,
+          watched: true,
+          watched_at: now,
+        }));
+
+        const { error: autoError } = await supabase
+          .from('tv_show_progress')
+          .upsert(rows, { onConflict: 'user_id,tmdb_id,season_number,episode_number' });
+
+        if (autoError) throw autoError;
 
         toast.success(`Auto-marked ${episodesToMark.length} previous episodes`);
       } catch (error) {
@@ -253,13 +245,6 @@ export function EpisodeTracker({ tvId, numberOfSeasons }: EpisodeTrackerProps) {
     );
 
     if (unwatchedEpisodes.length === 0) return;
-
-    if (unwatchedEpisodes.length > 5) {
-      const ok = window.confirm(
-        `Mark ${unwatchedEpisodes.length} episode${unwatchedEpisodes.length === 1 ? '' : 's'} in Season ${selectedSeason} as watched?`
-      );
-      if (!ok) return;
-    }
 
     setMarkingSeason(true);
     try {
