@@ -22,8 +22,16 @@ export function EpisodeTracker({ tvId, numberOfSeasons }: EpisodeTrackerProps) {
   const [progress, setProgress] = useState<TVShowProgress[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentSession, setCurrentSession] = useState<BingeSession | null>(null);
-  const [autoMarkEnabled, setAutoMarkEnabled] = useState(false);
+  const [autoMarkEnabled, setAutoMarkEnabled] = useState(() => {
+    const stored = localStorage.getItem('episodeTracker.autoMark');
+    return stored === null ? true : stored === 'true'; // default ON
+  });
+  const [markingSeason, setMarkingSeason] = useState(false);
   const [nextEpisodeCountdown, setNextEpisodeCountdown] = useState<string>('');
+
+  useEffect(() => {
+    localStorage.setItem('episodeTracker.autoMark', String(autoMarkEnabled));
+  }, [autoMarkEnabled]);
 
   useEffect(() => {
     loadSeasonData();
@@ -237,6 +245,54 @@ export function EpisodeTracker({ tvId, numberOfSeasons }: EpisodeTrackerProps) {
     return progress.some(p => p.episode_number === episodeNumber && p.watched);
   }
 
+  async function handleMarkSeasonWatched() {
+    if (!user || !seasonDetails || markingSeason) return;
+
+    const unwatchedEpisodes = seasonDetails.episodes.filter(
+      ep => !progress.some(p => p.episode_number === ep.episode_number && p.watched)
+    );
+
+    if (unwatchedEpisodes.length === 0) return;
+
+    if (unwatchedEpisodes.length > 5) {
+      const ok = window.confirm(
+        `Mark ${unwatchedEpisodes.length} episode${unwatchedEpisodes.length === 1 ? '' : 's'} in Season ${selectedSeason} as watched?`
+      );
+      if (!ok) return;
+    }
+
+    setMarkingSeason(true);
+    try {
+      const now = new Date().toISOString();
+      const rows = unwatchedEpisodes.map(ep => ({
+        user_id: user.id,
+        tmdb_id: tvId,
+        season_number: selectedSeason,
+        episode_number: ep.episode_number,
+        watched: true,
+        watched_at: now,
+      }));
+
+      // Single batch upsert. The unique constraint (user_id, tmdb_id, season_number, episode_number)
+      // upserts cleanly whether rows previously existed (as unwatched) or not.
+      const { error } = await supabase
+        .from('tv_show_progress')
+        .upsert(rows, { onConflict: 'user_id,tmdb_id,season_number,episode_number' });
+
+      if (error) throw error;
+
+      toast.success(
+        `Season ${selectedSeason} marked watched (${unwatchedEpisodes.length} episode${unwatchedEpisodes.length === 1 ? '' : 's'})`
+      );
+      await loadSeasonData();
+    } catch (err) {
+      console.error('Error marking season as watched:', err);
+      toast.error('Failed to mark season as watched');
+    } finally {
+      setMarkingSeason(false);
+    }
+  }
+
   if (loading || !seasonDetails) {
     return (
       <div className="flex items-center justify-center h-32">
@@ -308,14 +364,56 @@ export function EpisodeTracker({ tvId, numberOfSeasons }: EpisodeTrackerProps) {
               ? 'bg-primary-600 text-white'
               : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
           }`}
-          title="Auto-mark previous episodes when marking a later one"
+          title="When marking an episode watched, also mark earlier unwatched episodes in this season"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
           </svg>
-          Auto-mark
+          Auto-fill gaps
         </button>
       </div>
+
+      {seasonDetails && seasonDetails.episodes.length > 0 && (() => {
+        const unwatchedCount = seasonDetails.episodes.filter(
+          ep => !progress.some(p => p.episode_number === ep.episode_number && p.watched)
+        ).length;
+        const allWatched = unwatchedCount === 0;
+        return (
+          <button
+            onClick={handleMarkSeasonWatched}
+            disabled={markingSeason || allWatched}
+            className={`w-full mb-4 px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
+              allWatched
+                ? 'bg-green-600/20 text-green-400 cursor-default'
+                : 'bg-primary-600 hover:bg-primary-700 text-white disabled:opacity-50 disabled:cursor-not-allowed'
+            }`}
+          >
+            {markingSeason ? (
+              <>
+                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                Marking {unwatchedCount} episode{unwatchedCount === 1 ? '' : 's'}…
+              </>
+            ) : allWatched ? (
+              <>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Season {selectedSeason} fully watched
+              </>
+            ) : (
+              <>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                </svg>
+                Mark all {unwatchedCount} unwatched episode{unwatchedCount === 1 ? '' : 's'} in Season {selectedSeason} as watched
+              </>
+            )}
+          </button>
+        );
+      })()}
 
       <div className="space-y-3">
         {seasonDetails.episodes.map((episode, index) => {
