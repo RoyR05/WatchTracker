@@ -159,38 +159,36 @@ export function EpisodeTracker({ tvId, numberOfSeasons }: EpisodeTrackerProps) {
   async function autoMarkConsecutiveEpisodes(markedEpisode: number) {
     if (!user || !seasonDetails) return;
 
-    const firstUnwatchedBefore = seasonDetails.episodes
-      .filter(ep => ep.episode_number < markedEpisode)
-      .find(ep => !progress.some(p => p.episode_number === ep.episode_number && p.watched));
+    // Mark all unwatched episodes that come before the episode just checked
+    const episodesToMark = seasonDetails.episodes.filter(
+      ep =>
+        ep.episode_number < markedEpisode &&
+        !progress.some(p => p.episode_number === ep.episode_number && p.watched)
+    );
 
-    if (firstUnwatchedBefore) {
-      try {
-        const episodesToMark = seasonDetails.episodes.filter(
-          ep => ep.episode_number >= firstUnwatchedBefore.episode_number && ep.episode_number < markedEpisode
-        );
+    if (episodesToMark.length === 0) return;
 
-        if (episodesToMark.length === 0) return;
+    try {
+      const now = new Date().toISOString();
+      const rows = episodesToMark.map(ep => ({
+        user_id: user.id,
+        tmdb_id: tvId,
+        season_number: selectedSeason,
+        episode_number: ep.episode_number,
+        watched: true,
+        watched_at: now,
+      }));
 
-        const now = new Date().toISOString();
-        const rows = episodesToMark.map(ep => ({
-          user_id: user.id,
-          tmdb_id: tvId,
-          season_number: selectedSeason,
-          episode_number: ep.episode_number,
-          watched: true,
-          watched_at: now,
-        }));
+      const { error: autoError } = await supabase
+        .from('tv_show_progress')
+        .upsert(rows, { onConflict: 'user_id,tmdb_id,season_number,episode_number' });
 
-        const { error: autoError } = await supabase
-          .from('tv_show_progress')
-          .upsert(rows, { onConflict: 'user_id,tmdb_id,season_number,episode_number' });
+      if (autoError) throw autoError;
 
-        if (autoError) throw autoError;
-
-        toast.success(`Auto-marked ${episodesToMark.length} previous episodes`);
-      } catch (error) {
-        console.error('Error auto-marking episodes:', error);
-      }
+      toast.success(`Auto-filled ${episodesToMark.length} previous episode${episodesToMark.length !== 1 ? 's' : ''} as watched`);
+    } catch (error) {
+      console.error('Error auto-marking episodes:', error);
+      toast.error('Failed to auto-fill previous episodes');
     }
   }
 
