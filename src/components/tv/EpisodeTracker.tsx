@@ -12,9 +12,10 @@ type BingeSession = Database['public']['Tables']['binge_sessions']['Row'];
 interface EpisodeTrackerProps {
   tvId: number;
   numberOfSeasons: number;
+  seasons?: Array<{ season_number: number; episode_count: number }>;
 }
 
-export function EpisodeTracker({ tvId, numberOfSeasons }: EpisodeTrackerProps) {
+export function EpisodeTracker({ tvId, numberOfSeasons, seasons }: EpisodeTrackerProps) {
   const { user } = useAuth();
   const toast = useToast();
   const [selectedSeason, setSelectedSeason] = useState(1);
@@ -27,6 +28,7 @@ export function EpisodeTracker({ tvId, numberOfSeasons }: EpisodeTrackerProps) {
     return stored === null ? true : stored === 'true'; // default ON
   });
   const [markingSeason, setMarkingSeason] = useState(false);
+  const [autoFilling, setAutoFilling] = useState(false);
   const [nextEpisodeCountdown, setNextEpisodeCountdown] = useState<string>('');
 
   useEffect(() => {
@@ -159,25 +161,56 @@ export function EpisodeTracker({ tvId, numberOfSeasons }: EpisodeTrackerProps) {
   async function autoMarkConsecutiveEpisodes(markedEpisode: number) {
     if (!user || !seasonDetails) return;
 
-    // Mark all unwatched episodes that come before the episode just checked
-    const episodesToMark = seasonDetails.episodes.filter(
-      ep =>
-        ep.episode_number < markedEpisode &&
-        !progress.some(p => p.episode_number === ep.episode_number && p.watched)
-    );
-
-    if (episodesToMark.length === 0) return;
-
+    const crossSeason = !!seasons && selectedSeason > 1;
+    setAutoFilling(true);
     try {
       const now = new Date().toISOString();
-      const rows = episodesToMark.map(ep => ({
-        user_id: user.id,
-        tmdb_id: tvId,
-        season_number: selectedSeason,
-        episode_number: ep.episode_number,
-        watched: true,
-        watched_at: now,
-      }));
+      const rows: Array<{
+        user_id: string;
+        tmdb_id: number;
+        season_number: number;
+        episode_number: number;
+        watched: boolean;
+        watched_at: string;
+      }> = [];
+
+      if (crossSeason) {
+        // Single DB query: load all progress for this show across every season
+        const { data: allProgress } = await supabase
+          .from('tv_show_progress')
+          .select('season_number, episode_number, watched')
+          .eq('user_id', user.id)
+          .eq('tmdb_id', tvId);
+
+        const isWatched = (s: number, e: number) =>
+          (allProgress ?? []).some(p => p.season_number === s && p.episode_number === e && p.watched);
+
+        // All prior seasons (skip season 0 / specials)
+        const priorSeasons = seasons!.filter(s => s.season_number > 0 && s.season_number < selectedSeason);
+        for (const season of priorSeasons) {
+          for (let ep = 1; ep <= season.episode_count; ep++) {
+            if (!isWatched(season.season_number, ep)) {
+              rows.push({ user_id: user.id, tmdb_id: tvId, season_number: season.season_number, episode_number: ep, watched: true, watched_at: now });
+            }
+          }
+        }
+
+        // Current season: episodes before the clicked one (TMDB list for exact numbering)
+        for (const ep of seasonDetails.episodes) {
+          if (ep.episode_number < markedEpisode && !isWatched(selectedSeason, ep.episode_number)) {
+            rows.push({ user_id: user.id, tmdb_id: tvId, season_number: selectedSeason, episode_number: ep.episode_number, watched: true, watched_at: now });
+          }
+        }
+      } else {
+        // Single-season only: use local progress state (no extra DB call)
+        for (const ep of seasonDetails.episodes) {
+          if (ep.episode_number < markedEpisode && !progress.some(p => p.episode_number === ep.episode_number && p.watched)) {
+            rows.push({ user_id: user.id, tmdb_id: tvId, season_number: selectedSeason, episode_number: ep.episode_number, watched: true, watched_at: now });
+          }
+        }
+      }
+
+      if (rows.length === 0) return;
 
       const { error: autoError } = await supabase
         .from('tv_show_progress')
@@ -185,10 +218,17 @@ export function EpisodeTracker({ tvId, numberOfSeasons }: EpisodeTrackerProps) {
 
       if (autoError) throw autoError;
 
-      toast.success(`Auto-filled ${episodesToMark.length} previous episode${episodesToMark.length !== 1 ? 's' : ''} as watched`);
+      if (crossSeason && selectedSeason > 1) {
+        const priorCount = selectedSeason - 1;
+        toast.success(`Auto-filled ${rows.length} episode${rows.length !== 1 ? 's' : ''} across ${priorCount} previous season${priorCount !== 1 ? 's' : ''}`);
+      } else {
+        toast.success(`Auto-filled ${rows.length} previous episode${rows.length !== 1 ? 's' : ''} as watched`);
+      }
     } catch (error) {
       console.error('Error auto-marking episodes:', error);
       toast.error('Failed to auto-fill previous episodes');
+    } finally {
+      setAutoFilling(false);
     }
   }
 
@@ -364,7 +404,7 @@ export function EpisodeTracker({ tvId, numberOfSeasons }: EpisodeTrackerProps) {
         return (
           <button
             onClick={handleMarkSeasonWatched}
-            disabled={markingSeason || allWatched}
+            disabled={markingSeason || allWatched || autoFilling}
             className={`w-full mb-4 px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
               allWatched
                 ? 'bg-green-600/20 text-green-400 cursor-default'
@@ -413,7 +453,8 @@ export function EpisodeTracker({ tvId, numberOfSeasons }: EpisodeTrackerProps) {
             >
               <button
                 onClick={() => toggleEpisode(episode.episode_number, !watched)}
-                className={`flex-shrink-0 w-6 h-6 rounded border-2 flex items-center justify-center transition-colors ${
+                disabled={autoFilling}
+                className={`flex-shrink-0 w-6 h-6 rounded border-2 flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                   watched
                     ? 'bg-primary-600 border-primary-600'
                     : 'border-gray-500 hover:border-primary-500'

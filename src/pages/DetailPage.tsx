@@ -903,6 +903,7 @@ export default function DetailPage() {
                 <EpisodeTracker
                   tvId={details.id}
                   numberOfSeasons={details.number_of_seasons}
+                  seasons={details.seasons}
                 />
               </div>
             )}
