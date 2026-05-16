@@ -33,6 +33,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                 <span className="text-white font-bold text-lg">Admin Panel</span>
               </Link>
 
+              {/* Desktop nav */}
               <div className="hidden md:flex space-x-4">
                 {navItems.map((item) => (
                   <Link
@@ -56,7 +57,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                 to="/"
                 className="text-gray-300 hover:text-white text-sm font-medium"
               >
-                ← Back to App
+                ← Back
               </Link>
               <button
                 onClick={signOut}
@@ -65,6 +66,26 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                 Sign Out
               </button>
             </div>
+          </div>
+        </div>
+
+        {/* Mobile nav — horizontally scrollable pill row */}
+        <div className="md:hidden border-t border-gray-700 overflow-x-auto">
+          <div className="flex gap-2 px-4 py-2 w-max">
+            {navItems.map((item) => (
+              <Link
+                key={item.path}
+                to={item.path}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                  location.pathname === item.path
+                    ? 'bg-gray-600 text-white'
+                    : 'bg-gray-700/60 text-gray-300 hover:bg-gray-700 hover:text-white'
+                }`}
+              >
+                <span>{item.icon}</span>
+                {item.label}
+              </Link>
+            ))}
           </div>
         </div>
       </nav>
