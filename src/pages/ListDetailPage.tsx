@@ -6,6 +6,7 @@ import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { tmdbService } from '../services/tmdb';
+import { RecommendModal } from '../components/recommendations/RecommendModal';
 import type { Database } from '../types/database.types';
 import type { Movie, TVShow } from '../services/tmdb';
 
@@ -34,6 +35,12 @@ export default function ListDetailPage() {
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editNoteText, setEditNoteText] = useState('');
   const noteInputRef = useRef<HTMLTextAreaElement>(null);
+  const [recommendTarget, setRecommendTarget] = useState<{
+    tmdbId: number;
+    mediaType: 'movie' | 'tv';
+    title: string;
+    note: string;
+  } | null>(null);
 
   const loadList = useCallback(async () => {
     if (!id || !user) return;
@@ -441,6 +448,26 @@ export default function ListDetailPage() {
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
+                      setRecommendTarget({
+                        tmdbId: item.tmdb_id,
+                        mediaType: item.media_type,
+                        title: item.media ? getTitle(item.media) : 'this title',
+                        note: item.notes ?? '',
+                      });
+                    }}
+                    className="absolute top-2 left-2 p-1.5 bg-black/70 hover:bg-primary-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all"
+                    title="Recommend to users"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                    </svg>
+                  </button>
+                )}
+                {isOwner && (
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
                       removeItem(item.id);
                     }}
                     disabled={removing === item.id}
@@ -461,6 +488,17 @@ export default function ListDetailPage() {
           </div>
         )}
       </div>
+
+      {recommendTarget && (
+        <RecommendModal
+          isOpen={true}
+          onClose={() => setRecommendTarget(null)}
+          tmdbId={recommendTarget.tmdbId}
+          mediaType={recommendTarget.mediaType}
+          title={recommendTarget.title}
+          initialNote={recommendTarget.note}
+        />
+      )}
     </Layout>
   );
 }

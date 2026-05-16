@@ -139,6 +139,7 @@ export interface Database {
           name: string
           description: string
           is_public: boolean
+          is_curated: boolean
           created_at: string
           updated_at: string
         }
@@ -148,6 +149,7 @@ export interface Database {
           name: string
           description?: string
           is_public?: boolean
+          is_curated?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -157,6 +159,7 @@ export interface Database {
           name?: string
           description?: string
           is_public?: boolean
+          is_curated?: boolean
           created_at?: string
           updated_at?: string
         }
