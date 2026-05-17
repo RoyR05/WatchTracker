@@ -6,9 +6,11 @@ interface HelpPanelProps {
   open: boolean;
   onClose: () => void;
   onReplayTour: () => void;
+  installAvailable?: boolean;
+  onInstall?: () => void;
 }
 
-export function HelpPanel({ open, onClose, onReplayTour }: HelpPanelProps) {
+export function HelpPanel({ open, onClose, onReplayTour, installAvailable, onInstall }: HelpPanelProps) {
   const location = useLocation();
   const [selected, setSelected] = useState<HelpTopic | null>(null);
   const [showAll, setShowAll] = useState(false);
@@ -102,7 +104,15 @@ export function HelpPanel({ open, onClose, onReplayTour }: HelpPanelProps) {
           </div>
         </div>
 
-        <div className="px-5 py-4 border-t border-white/10">
+        <div className="px-5 py-4 border-t border-white/10 space-y-2">
+          {installAvailable && onInstall && (
+            <button
+              onClick={onInstall}
+              className="w-full px-4 py-2.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-sm font-semibold transition-colors"
+            >
+              ⤓ Install app
+            </button>
+          )}
           <button
             onClick={onReplayTour}
             className="w-full px-4 py-2.5 rounded-lg bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold transition-colors"

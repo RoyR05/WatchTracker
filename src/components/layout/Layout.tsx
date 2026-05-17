@@ -6,6 +6,8 @@ import { supabase } from '../../lib/supabase';
 import { checkUpcomingEpisodeNotifications } from '../../services/episodeNotifications';
 import { OnboardingTour } from '../onboarding/OnboardingTour';
 import { HelpPanel } from '../help/HelpPanel';
+import { InstallPrompt } from '../pwa/InstallPrompt';
+import { usePwaInstall } from '../../hooks/usePwaInstall';
 
 interface LayoutProps {
   children: ReactNode;
@@ -18,6 +20,7 @@ export function Layout({ children }: LayoutProps) {
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [helpOpen, setHelpOpen] = useState(false);
   const [tourOpen, setTourOpen] = useState(false);
+  const pwa = usePwaInstall();
 
   // First-run: auto-open the welcome tour once per account.
   useEffect(() => {
@@ -394,6 +397,19 @@ export function Layout({ children }: LayoutProps) {
           setHelpOpen(false);
           setTourOpen(true);
         }}
+        installAvailable={pwa.canInstall}
+        onInstall={() => {
+          setHelpOpen(false);
+          pwa.promptInstall();
+        }}
+      />
+      <InstallPrompt
+        canInstall={pwa.canInstall}
+        iosInstallable={pwa.iosInstallable}
+        snoozed={pwa.snoozed}
+        isStandalone={pwa.isStandalone}
+        onInstall={pwa.promptInstall}
+        onDismiss={pwa.snooze}
       />
     </div>
   );
