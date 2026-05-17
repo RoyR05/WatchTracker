@@ -18,6 +18,8 @@ import ListDetailPage from './pages/ListDetailPage';
 import CalendarPage from './pages/CalendarPage';
 import RecommendationsPage from './pages/RecommendationsPage';
 import { PersonPage } from './pages/PersonPage';
+import FollowingPage from './pages/FollowingPage';
+import NetworksPage from './pages/NetworksPage';
 import { NotificationsPage } from './pages/NotificationsPage';
 import DiscoveryPage from './pages/DiscoveryPage';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
@@ -47,6 +49,8 @@ function AnimatedRoutes() {
         <Route path="/search" element={<ProtectedRoute><PageTransition><SearchPage /></PageTransition></ProtectedRoute>} />
         <Route path="/details/:mediaType/:id" element={<ProtectedRoute><PageTransition><DetailPage /></PageTransition></ProtectedRoute>} />
         <Route path="/person/:id" element={<ProtectedRoute><PageTransition><PersonPage /></PageTransition></ProtectedRoute>} />
+        <Route path="/following" element={<ProtectedRoute><PageTransition><FollowingPage /></PageTransition></ProtectedRoute>} />
+        <Route path="/networks" element={<ProtectedRoute><PageTransition><NetworksPage /></PageTransition></ProtectedRoute>} />
         <Route path="/profile" element={<ProtectedRoute><PageTransition><ProfilePage /></PageTransition></ProtectedRoute>} />
         <Route path="/lists" element={<ProtectedRoute><PageTransition><ListsPage /></PageTransition></ProtectedRoute>} />
         <Route path="/lists/:id" element={<ProtectedRoute><PageTransition><ListDetailPage /></PageTransition></ProtectedRoute>} />

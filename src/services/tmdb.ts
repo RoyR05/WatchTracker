@@ -287,6 +287,22 @@ export const tmdbService = {
     return tmdbFetch(`/discover/${mediaType}`, params);
   },
 
+  // Browse a streaming service's catalog (TMDB watch-provider, US region).
+  discoverByProvider: async (
+    mediaType: 'movie' | 'tv',
+    providerId: number,
+    page = 1,
+    sortBy: 'popularity.desc' | 'primary_release_date.desc' | 'first_air_date.desc' = 'popularity.desc'
+  ): Promise<{ results: Array<Movie | TVShow>; total_pages: number }> => {
+    return tmdbFetch(`/discover/${mediaType}`, {
+      page: page.toString(),
+      with_watch_providers: providerId.toString(),
+      watch_region: 'US',
+      sort_by: sortBy,
+      'vote_count.gte': '20',
+    });
+  },
+
   getUpcomingMovies: async (page = 1, englishOnly = false) => {
     if (englishOnly) {
       const today = new Date();

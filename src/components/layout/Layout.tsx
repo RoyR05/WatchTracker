@@ -127,6 +127,30 @@ export function Layout({ children }: LayoutProps) {
                   Discovery
                 </NavLink>
                 <NavLink
+                  to="/networks"
+                  className={({ isActive }) =>
+                    `px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                      isActive
+                        ? 'bg-gray-900 text-white'
+                        : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                    }`
+                  }
+                >
+                  Networks
+                </NavLink>
+                <NavLink
+                  to="/following"
+                  className={({ isActive }) =>
+                    `px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                      isActive
+                        ? 'bg-gray-900 text-white'
+                        : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                    }`
+                  }
+                >
+                  Following
+                </NavLink>
+                <NavLink
                   to="/search"
                   className={({ isActive }) =>
                     `px-3 py-2 rounded-md text-sm font-medium transition-colors ${

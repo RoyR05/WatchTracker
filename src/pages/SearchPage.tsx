@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Layout } from '../components/layout/Layout';
 import { MediaCard } from '../components/media/MediaCard';
+import { PersonCard, PersonResult } from '../components/media/PersonCard';
 import { SkeletonGrid } from '../components/ui/Skeleton';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { useToast } from '../contexts/ToastContext';
@@ -9,13 +10,19 @@ import { tmdbService } from '../services/tmdb';
 import { preferencesService } from '../services/preferences';
 import type { Movie, TVShow } from '../services/tmdb';
 
-type MediaFilter = 'all' | 'movie' | 'tv';
+type SearchResult = (Movie | TVShow | PersonResult) & { media_type?: 'movie' | 'tv' | 'person' };
+type MediaFilter = 'all' | 'movie' | 'tv' | 'person';
+
+function resultType(item: SearchResult): 'movie' | 'tv' | 'person' {
+  if (item.media_type) return item.media_type;
+  return 'title' in item ? 'movie' : 'name' in item ? 'tv' : 'person';
+}
 
 export default function SearchPage() {
   const { user } = useAuth();
   const [query, setQuery] = useState('');
   const [mediaFilter, setMediaFilter] = useState<MediaFilter>('all');
-  const [results, setResults] = useState<Array<Movie | TVShow>>([]);
+  const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [searched, setSearched] = useState(false);
@@ -26,18 +33,19 @@ export default function SearchPage() {
 
   useEffect(() => {
     if (!user || results.length === 0) return;
-    const items = results.map(item => ({
-      tmdbId: item.id,
-      mediaType: ('title' in item ? 'movie' : 'tv') as 'movie' | 'tv',
-    }));
+    const items = results
+      .filter(item => resultType(item) !== 'person')
+      .map(item => ({
+        tmdbId: item.id,
+        mediaType: resultType(item) as 'movie' | 'tv',
+      }));
+    if (items.length === 0) return;
     preferencesService.getPreferencesForItems(items, user.id).then(setPreferenceMap);
   }, [user, results]);
 
   const filteredResults = mediaFilter === 'all'
     ? results
-    : results.filter(item =>
-        mediaFilter === 'movie' ? 'title' in item : 'name' in item
-      );
+    : results.filter(item => resultType(item) === mediaFilter);
 
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -48,7 +56,7 @@ export default function SearchPage() {
     try {
       const data = await tmdbService.searchMulti(query, 1);
       const filtered = (data.results as any[]).filter(
-        item => item.media_type === 'movie' || item.media_type === 'tv'
+        item => item.media_type === 'movie' || item.media_type === 'tv' || item.media_type === 'person'
       );
       setResults(filtered);
       setTotalPages(data.total_pages);
@@ -67,7 +75,7 @@ export default function SearchPage() {
       const nextPage = currentPage + 1;
       const data = await tmdbService.searchMulti(query, nextPage);
       const filtered = (data.results as any[]).filter(
-        item => item.media_type === 'movie' || item.media_type === 'tv'
+        item => item.media_type === 'movie' || item.media_type === 'tv' || item.media_type === 'person'
       );
       setResults(prev => [...prev, ...filtered]);
       setCurrentPage(nextPage);
@@ -88,7 +96,14 @@ export default function SearchPage() {
     { label: 'All', value: 'all' },
     { label: 'Movies', value: 'movie' },
     { label: 'TV Shows', value: 'tv' },
+    { label: 'People', value: 'person' },
   ];
+
+  const countFor = (v: MediaFilter) => results.filter(r => resultType(r) === v).length;
+
+  const filterNoun = mediaFilter === 'movie' ? 'movie'
+    : mediaFilter === 'tv' ? 'TV show'
+    : mediaFilter === 'person' ? 'person' : '';
 
   return (
     <Layout>
@@ -108,7 +123,7 @@ export default function SearchPage() {
               type="text"
               value={query}
               onChange={e => setQuery(e.target.value)}
-              placeholder="Search movies, TV shows..."
+              placeholder="Search movies, TV shows, people..."
               className="w-full px-4 py-3 pl-12 pr-28 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             />
             <button
@@ -122,7 +137,7 @@ export default function SearchPage() {
 
         {/* Media type filter — only show after a search */}
         {searched && (
-          <div className="flex gap-2 mb-6">
+          <div className="flex gap-2 mb-6 flex-wrap">
             {filterButtons.map(btn => (
               <button
                 key={btn.value}
@@ -136,7 +151,7 @@ export default function SearchPage() {
                 {btn.label}
                 {btn.value !== 'all' && results.length > 0 && (
                   <span className="ml-1.5 text-xs opacity-70">
-                    ({results.filter(r => btn.value === 'movie' ? 'title' in r : 'name' in r).length})
+                    ({countFor(btn.value)})
                   </span>
                 )}
               </button>
@@ -149,18 +164,26 @@ export default function SearchPage() {
         {!loading && filteredResults.length > 0 && (
           <div>
             <p className="text-gray-400 mb-4 text-sm">
-              {filteredResults.length}{mediaFilter !== 'all' ? ` ${mediaFilter === 'movie' ? 'movie' : 'TV show'}` : ''} result{filteredResults.length !== 1 ? 's' : ''}
+              {filteredResults.length}{filterNoun ? ` ${filterNoun}` : ''} result{filteredResults.length !== 1 ? 's' : ''}
               {currentPage < totalPages && ` · page ${currentPage} of ${totalPages}`}
             </p>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
               {filteredResults.map((item, index) => {
-                const mt = 'title' in item ? 'movie' : 'tv';
+                const rt = resultType(item);
+                if (rt === 'person') {
+                  return (
+                    <PersonCard
+                      key={`person-${item.id}-${index}`}
+                      person={item as PersonResult}
+                    />
+                  );
+                }
                 return (
                   <MediaCard
                     key={`${item.id}-${index}`}
-                    item={item}
-                    mediaType={mt}
-                    initialPreference={preferenceMap.get(`${item.id}-${mt}`) ?? null}
+                    item={item as Movie | TVShow}
+                    mediaType={rt}
+                    initialPreference={preferenceMap.get(`${item.id}-${rt}`) ?? null}
                   />
                 );
               })}
@@ -182,7 +205,7 @@ export default function SearchPage() {
             <p className="text-white font-medium mb-1">No results found</p>
             <p className="text-gray-400 text-sm">
               {mediaFilter !== 'all'
-                ? `No ${mediaFilter === 'movie' ? 'movies' : 'TV shows'} matched "${query}". Try switching the filter to All.`
+                ? `No ${filterNoun}s matched "${query}". Try switching the filter to All.`
                 : `No results for "${query}". Try different keywords.`}
             </p>
           </div>
@@ -195,7 +218,7 @@ export default function SearchPage() {
                 d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
             <p className="text-white font-medium mb-1">Search for anything</p>
-            <p className="text-gray-400 text-sm">Find movies and TV shows to add to your watchlist</p>
+            <p className="text-gray-400 text-sm">Find movies, TV shows, and people to follow or add to your watchlist</p>
           </div>
         )}
       </div>

@@ -326,6 +326,52 @@ export interface Database {
           updated_at?: string
         }
       }
+      followed_people: {
+        Row: {
+          id: string
+          user_id: string
+          person_id: number
+          name: string
+          profile_path: string | null
+          known_for_department: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          person_id: number
+          name: string
+          profile_path?: string | null
+          known_for_department?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          person_id?: number
+          name?: string
+          profile_path?: string | null
+          known_for_department?: string | null
+          created_at?: string
+        }
+      }
+      followed_feed_cache: {
+        Row: {
+          user_id: string
+          payload: Json
+          computed_at: string
+        }
+        Insert: {
+          user_id: string
+          payload?: Json
+          computed_at?: string
+        }
+        Update: {
+          user_id?: string
+          payload?: Json
+          computed_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never

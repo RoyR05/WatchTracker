@@ -2,13 +2,20 @@ import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Layout } from '../components/layout/Layout';
 import { tmdbService, PersonDetails, PersonCredits, MovieCredit, TVCredit } from '../services/tmdb';
+import { followedPeopleService } from '../services/followedPeople';
+import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
 
 export function PersonPage() {
   const { id } = useParams<{ id: string }>();
+  const { user } = useAuth();
+  const toast = useToast();
   const [person, setPerson] = useState<PersonDetails | null>(null);
   const [credits, setCredits] = useState<PersonCredits | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'movies' | 'tv'>('movies');
+  const [following, setFollowing] = useState(false);
+  const [followBusy, setFollowBusy] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -32,6 +39,37 @@ export function PersonPage() {
 
     fetchPersonData();
   }, [id]);
+
+  useEffect(() => {
+    if (!id || !user) return;
+    followedPeopleService.isFollowing(parseInt(id)).then(setFollowing);
+  }, [id, user]);
+
+  async function toggleFollow() {
+    if (!id || !person) return;
+    if (!user) {
+      toast.error('Please sign in to follow people');
+      return;
+    }
+    setFollowBusy(true);
+    const next = !following;
+    setFollowing(next); // optimistic
+    const res = next
+      ? await followedPeopleService.follow({
+          person_id: person.id,
+          name: person.name,
+          profile_path: person.profile_path,
+          known_for_department: person.known_for_department,
+        })
+      : await followedPeopleService.unfollow(person.id);
+    if (!res.success) {
+      setFollowing(!next); // revert
+      toast.error(res.error || 'Failed to update follow');
+    } else {
+      toast.success(next ? `Following ${person.name}` : `Unfollowed ${person.name}`);
+    }
+    setFollowBusy(false);
+  }
 
   if (loading) {
     return (
@@ -82,7 +120,20 @@ export function PersonPage() {
           </div>
 
           <div className="md:w-2/3">
-            <h1 className="text-4xl font-bold text-white mb-4">{person.name}</h1>
+            <div className="flex flex-wrap items-center gap-4 mb-4">
+              <h1 className="text-4xl font-bold text-white">{person.name}</h1>
+              <button
+                onClick={toggleFollow}
+                disabled={followBusy}
+                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50 ${
+                  following
+                    ? 'bg-gray-700 text-white hover:bg-gray-600'
+                    : 'bg-primary-600 text-white hover:bg-primary-700'
+                }`}
+              >
+                {following ? '✓ Following' : '+ Follow'}
+              </button>
+            </div>
 
             <div className="space-y-6">
               <div>

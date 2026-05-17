@@ -8,8 +8,24 @@ import { MediaCard } from '../components/media/MediaCard';
 import { tmdbService } from '../services/tmdb';
 import { userSettingsService } from '../services/userSettings';
 import { preferencesService } from '../services/preferences';
+import { followedPeopleService, FollowedFeedItem } from '../services/followedPeople';
+import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import type { Movie, TVShow } from '../services/tmdb';
+
+function feedItemToMedia(it: FollowedFeedItem): Movie | TVShow {
+  const base = {
+    id: it.tmdb_id,
+    overview: '',
+    poster_path: it.poster_path,
+    backdrop_path: null,
+    vote_average: it.vote_average,
+    genre_ids: [] as number[],
+  };
+  return it.media_type === 'movie'
+    ? { ...base, title: it.title, release_date: it.release_date }
+    : { ...base, name: it.title, first_air_date: it.release_date };
+}
 
 export default function DiscoveryPage() {
   const { user } = useAuth();
@@ -18,6 +34,9 @@ export default function DiscoveryPage() {
   const [loadingTrending, setLoadingTrending] = useState(true);
   const [englishOnly, setEnglishOnly] = useState(false);
   const [preferenceMap, setPreferenceMap] = useState<Map<string, 'like' | 'dislike'>>(new Map());
+  const [followedItems, setFollowedItems] = useState<Array<Movie | TVShow>>([]);
+  const [loadingFollowed, setLoadingFollowed] = useState(true);
+  const [followedPrefMap, setFollowedPrefMap] = useState<Map<string, 'like' | 'dislike'>>(new Map());
 
   useEffect(() => {
     if (!user || trendingToday.length === 0) return;
@@ -35,6 +54,45 @@ export default function DiscoveryPage() {
     }
     loadSettings();
   }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    async function loadFollowedFeed() {
+      setLoadingFollowed(true);
+      try {
+        const feed = await followedPeopleService.getFollowedFeed();
+        if (cancelled || feed.length === 0) {
+          if (!cancelled) setFollowedItems([]);
+          return;
+        }
+        // Exclude titles already on the user's watchlist
+        const { data: wl } = await supabase
+          .from('watchlist_items')
+          .select('tmdb_id, media_type')
+          .eq('user_id', user!.id)
+          .in('tmdb_id', feed.map(f => f.tmdb_id));
+        const onList = new Set((wl ?? []).map(w => `${w.tmdb_id}-${w.media_type}`));
+        const visible = feed.filter(f => !onList.has(`${f.tmdb_id}-${f.media_type}`));
+        if (cancelled) return;
+
+        const media = visible.map(feedItemToMedia);
+        setFollowedItems(media);
+
+        const prefItems = visible.map(f => ({ tmdbId: f.tmdb_id, mediaType: f.media_type }));
+        if (prefItems.length > 0) {
+          const pm = await preferencesService.getPreferencesForItems(prefItems, user!.id);
+          if (!cancelled) setFollowedPrefMap(pm);
+        }
+      } catch (error) {
+        console.error('Error loading followed feed:', error);
+      } finally {
+        if (!cancelled) setLoadingFollowed(false);
+      }
+    }
+    loadFollowedFeed();
+    return () => { cancelled = true; };
+  }, [user]);
 
   useEffect(() => {
     async function loadTrendingToday() {
@@ -127,6 +185,45 @@ export default function DiscoveryPage() {
             )}
           </div>
         </section>
+
+        {(loadingFollowed || followedItems.length > 0) && (
+          <section>
+            <div className="bg-gradient-to-r from-gray-800/50 to-gray-900/50 backdrop-blur-sm rounded-2xl p-6 border border-gray-700">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold text-white">From People You Follow</h2>
+                <span className="text-sm text-gray-400">New &amp; upcoming</span>
+              </div>
+
+              {loadingFollowed ? (
+                <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
+                  {Array.from({ length: 8 }).map((_, i) => (
+                    <div key={i} className="flex-shrink-0 w-32 sm:w-40">
+                      <div className="bg-gray-800 animate-pulse rounded-lg aspect-[2/3]" />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide snap-x snap-mandatory">
+                  {followedItems.map((item) => {
+                    const mt = 'title' in item ? 'movie' : 'tv';
+                    return (
+                      <div key={`${item.id}-${mt}`} className="flex-shrink-0 w-32 sm:w-40 snap-start">
+                        <MediaCard
+                          item={item}
+                          mediaType={mt}
+                          initialPreference={followedPrefMap.get(`${item.id}-${mt}`) ?? null}
+                          onDislike={(id) =>
+                            setFollowedItems((prev) => prev.filter((x) => x.id !== id))
+                          }
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </section>
+        )}
 
         <MoodDiscovery />
 
