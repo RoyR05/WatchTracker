@@ -87,23 +87,22 @@ export default function ProfilePage() {
 
   async function compressImage(file: File, maxBytes = 2 * 1024 * 1024): Promise<File> {
     if (file.size <= maxBytes) return file;
-    return new Promise((resolve) => {
-      const img = new Image();
-      const url = URL.createObjectURL(file);
-      img.onload = () => {
-        URL.revokeObjectURL(url);
-        const MAX_DIM = 800;
-        let { width, height } = img;
-        if (width > MAX_DIM || height > MAX_DIM) {
-          if (width >= height) { height = Math.round((height / width) * MAX_DIM); width = MAX_DIM; }
-          else { width = Math.round((width / height) * MAX_DIM); height = MAX_DIM; }
-        }
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) { resolve(file); return; }
-        ctx.drawImage(img, 0, 0, width, height);
+    try {
+      const bitmap = await createImageBitmap(file);
+      const MAX_DIM = 1000;
+      let { width, height } = bitmap;
+      if (width > MAX_DIM || height > MAX_DIM) {
+        if (width >= height) { height = Math.round((height / width) * MAX_DIM); width = MAX_DIM; }
+        else { width = Math.round((width / height) * MAX_DIM); height = MAX_DIM; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { bitmap.close(); return file; }
+      ctx.drawImage(bitmap, 0, 0, width, height);
+      bitmap.close();
+      return await new Promise<File>((resolve) => {
         const tryQuality = (q: number) => {
           canvas.toBlob(blob => {
             if (!blob) { resolve(file); return; }
@@ -114,11 +113,11 @@ export default function ProfilePage() {
             }
           }, 'image/jpeg', q);
         };
-        tryQuality(0.75);
-      };
-      img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
-      img.src = url;
-    });
+        tryQuality(0.8);
+      });
+    } catch {
+      return file;
+    }
   }
 
   async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
