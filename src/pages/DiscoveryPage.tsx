@@ -147,9 +147,7 @@ export default function DiscoveryPage() {
     setRawFollowedItems(prev => prev.filter(i => i.tmdb_id !== tmdbId));
     setFollowedItems(prev => prev.filter(i => i.id !== tmdbId));
     // Invalidate cache so next reload recomputes without this item
-    if (user) {
-      await supabase.from('followed_feed_cache').delete().eq('user_id', user.id);
-    }
+    await followedPeopleService.invalidateCache();
   }
 
   if (selectedProvider) {

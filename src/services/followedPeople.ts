@@ -258,7 +258,11 @@ export const followedPeopleService = {
       Date.now() - new Date(cached.computed_at).getTime() < DAY_MS;
 
     if (fresh) {
-      return (cached!.payload as unknown as FollowedFeedItem[]) ?? [];
+      const payload = (cached!.payload as unknown as FollowedFeedItem[]) ?? [];
+      const hiddenItems = await this.getHiddenItems();
+      if (hiddenItems.length === 0) return payload;
+      const hiddenKeys = new Set(hiddenItems.map(h => `${h.tmdb_id}-${h.media_type}`));
+      return payload.filter(item => !hiddenKeys.has(`${item.tmdb_id}-${item.media_type}`));
     }
 
     const items = await this.computeNewReleasesFromFollowed();
@@ -272,5 +276,15 @@ export const followedPeopleService = {
     );
     if (error) console.error('followed_feed_cache upsert failed:', error);
     return items;
+  },
+
+  async invalidateCache(): Promise<void> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    // Use UPDATE to epoch time so the cache appears stale and recomputes on next load.
+    // Belt-and-suspenders: also try DELETE now that the RLS policy exists.
+    await supabase.from('followed_feed_cache')
+      .update({ computed_at: new Date(0).toISOString() })
+      .eq('user_id', user.id);
   },
 };
