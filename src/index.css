@@ -2,9 +2,25 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --rf-bg: #111719;
+  --rf-bg-soft: #151b1f;
+  --rf-card: #1B2227;
+  --rf-border: rgba(255,255,255,.10);
+  --rf-text: #F5F7F8;
+  --rf-muted: #9AA3A9;
+  --rf-red: #E31E35;
+  --rf-red-dark: #A61224;
+  --rf-charcoal: #2F3A40;
+}
+
 @layer base {
   body {
-    @apply bg-gray-900 text-gray-100 font-sans antialiased;
+    @apply text-gray-100 font-sans antialiased;
+    background: radial-gradient(circle at top, #1c242a 0%, var(--rf-bg) 42%, #07090a 100%);
+    background-attachment: fixed;
+    color: var(--rf-text);
+    min-height: 100vh;
   }
 }
 

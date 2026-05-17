@@ -59,14 +59,18 @@ export default function AuthPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 px-4">
+    <div className="min-h-screen flex items-center justify-center px-4" style={{ background: 'radial-gradient(circle at top, #1c242a 0%, #111719 42%, #07090a 100%)' }}>
       <div className="max-w-md w-full space-y-8">
-        <div className="text-center">
-          <h1 className="text-4xl font-bold text-white mb-2">WatchTracker</h1>
-          <p className="text-gray-400">Track your favorite movies and TV shows</p>
+        <div className="flex flex-col items-center text-center">
+          <img
+            src="/logos/raineyflix-full-logo-transparent.png"
+            alt="RaineyFlixs"
+            className="h-16 w-auto object-contain mb-3"
+          />
+          <p className="text-gray-400">A personal streaming tracker and recommendation app.</p>
         </div>
 
-        <div className="bg-gray-800 rounded-lg shadow-xl p-8">
+        <div className="bg-brand-card/80 border border-white/10 rounded-2xl shadow-2xl p-8">
           <div className="flex mb-6 bg-gray-700 rounded-lg p-1">
             <button
               type="button"

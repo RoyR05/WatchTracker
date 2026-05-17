@@ -7,27 +7,16 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
-      manifest: {
-        name: 'WatchTracker',
-        short_name: 'WatchTracker',
-        description: 'Track your favorite movies and TV shows',
-        theme_color: '#1f2937',
-        background_color: '#111827',
-        display: 'standalone',
-        icons: [
-          {
-            src: 'pwa-192x192.png',
-            sizes: '192x192',
-            type: 'image/png'
-          },
-          {
-            src: 'pwa-512x512.png',
-            sizes: '512x512',
-            type: 'image/png'
-          }
-        ]
-      },
+      // Use the static RaineyFlixs manifest in /public/manifest.json
+      // (linked manually in index.html) instead of generating one here.
+      manifest: false,
+      includeAssets: [
+        'icons/favicon.ico',
+        'icons/favicon-16x16.png',
+        'icons/favicon-32x32.png',
+        'icons/apple-touch-icon.png',
+        'manifest.json',
+      ],
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         runtimeCaching: [

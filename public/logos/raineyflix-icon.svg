@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="RaineyFlixs icon">
+  <rect width="512" height="512" rx="104" fill="#111719"/>
+  <path d="M128 206h150c42 0 78 34 78 76 0 34-22 61-54 72l64 86h-82l-58-76h-54v76h-44V206z" fill="#2f3a40"/>
+  <path d="M155 300l54 54 144-170" fill="none" stroke="#E31E35" stroke-width="38" stroke-linecap="square" stroke-linejoin="miter"/>
+  <path d="M132 143l53-13 51 30-57 12zM219 119l60-14 50 31-60 14zM317 95l64-15 18 49-60 14z" fill="#E31E35"/>
+  <path d="M128 185h60l-42 42h-58zM213 185h65l-42 42h-65zM305 185h70l-42 42h-70z" fill="#E31E35"/>
+</svg>
