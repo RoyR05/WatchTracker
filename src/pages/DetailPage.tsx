@@ -10,6 +10,8 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { preferencesService } from '../services/preferences';
+import { followedPeopleService } from '../services/followedPeople';
+import { CreditCard } from '../components/media/CreditCard';
 import { plexService } from '../services/plex';
 import { queryKeys } from '../lib/queryKeys';
 import type { PlexAvailability, PlexRequest } from '../services/plex';
@@ -55,6 +57,30 @@ export default function DetailPage() {
 
   const cast = credits?.cast ?? [];
   const crew = credits?.crew ?? [];
+
+  // Group crew so each person appears once with their combined roles,
+  // ordered Directing → Writing → Production → everything else.
+  const DEPT_RANK: Record<string, number> = { Directing: 0, Writing: 1, Production: 2 };
+  const groupedCrew = (() => {
+    const map = new Map<number, { id: number; name: string; profile_path: string | null; jobs: string[]; rank: number }>();
+    for (const c of crew) {
+      const existing = map.get(c.id);
+      const rank = DEPT_RANK[c.department] ?? 3;
+      if (existing) {
+        if (!existing.jobs.includes(c.job)) existing.jobs.push(c.job);
+        existing.rank = Math.min(existing.rank, rank);
+      } else {
+        map.set(c.id, {
+          id: c.id,
+          name: c.name,
+          profile_path: c.profile_path ?? null,
+          jobs: [c.job],
+          rank,
+        });
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name));
+  })();
   const videos: Video[] = (videosData?.results ?? []).filter(v => v.site === 'YouTube');
   const loading = detailsLoading;
 
@@ -65,6 +91,8 @@ export default function DetailPage() {
   const [showRecommendModal, setShowRecommendModal] = useState(false);
   const [showAddToListModal, setShowAddToListModal] = useState(false);
   const [showAllCast, setShowAllCast] = useState(false);
+  const [peopleTab, setPeopleTab] = useState<'cast' | 'crew'>('cast');
+  const [followedIds, setFollowedIds] = useState<Set<number>>(new Set());
   const [plexStatus, setPlexStatus] = useState<'idle' | 'checking' | 'available' | 'unavailable' | 'error'>('idle');
   const [plexAvailability, setPlexAvailability] = useState<PlexAvailability | null>(null);
   const [plexRequest, setPlexRequest] = useState<PlexRequest | null>(null);
@@ -84,6 +112,49 @@ export default function DetailPage() {
     updated_at: string;
   }
   const [friendsNotes, setFriendsNotes] = useState<FriendNote[]>([]);
+
+  useEffect(() => {
+    if (!user) return;
+    followedPeopleService.listFollowedIds().then(setFollowedIds);
+  }, [user]);
+
+  async function toggleFollowPerson(
+    personId: number,
+    name: string,
+    profilePath: string | null,
+    role: string
+  ) {
+    if (!user) {
+      toast.error('Please sign in to follow people');
+      return;
+    }
+    const wasFollowed = followedIds.has(personId);
+    setFollowedIds((prev) => {
+      const next = new Set(prev);
+      if (wasFollowed) next.delete(personId);
+      else next.add(personId);
+      return next;
+    });
+    const res = wasFollowed
+      ? await followedPeopleService.unfollow(personId)
+      : await followedPeopleService.follow({
+          person_id: personId,
+          name,
+          profile_path: profilePath,
+          known_for_department: role,
+        });
+    if (!res.success) {
+      setFollowedIds((prev) => {
+        const next = new Set(prev);
+        if (wasFollowed) next.add(personId);
+        else next.delete(personId);
+        return next;
+      });
+      toast.error(res.error || 'Failed to update follow');
+    } else {
+      toast.success(wasFollowed ? `Unfollowed ${name}` : `Following ${name}`);
+    }
+  }
 
   useEffect(() => {
     if (!id || !mediaType || !user) return;
@@ -855,45 +926,88 @@ export default function DetailPage() {
               </div>
             )}
 
-            {cast.length > 0 && (
+            {(cast.length > 0 || groupedCrew.length > 0) && (
               <div className="mb-8">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-bold text-white">Top Billed Cast</h2>
-                  {cast.length > 10 && !showAllCast && (
+                <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+                  <div className="flex gap-2">
                     <button
-                      onClick={() => setShowAllCast(true)}
-                      className="text-blue-500 hover:text-blue-400 font-medium text-sm transition-colors"
+                      onClick={() => { setPeopleTab('cast'); setShowAllCast(false); }}
+                      className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-colors ${
+                        peopleTab === 'cast'
+                          ? 'bg-primary-600 text-white'
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      }`}
                     >
-                      View All Cast ({cast.length})
+                      Cast ({cast.length})
                     </button>
-                  )}
-                  {showAllCast && (
                     <button
-                      onClick={() => setShowAllCast(false)}
-                      className="text-blue-500 hover:text-blue-400 font-medium text-sm transition-colors"
+                      onClick={() => { setPeopleTab('crew'); setShowAllCast(false); }}
+                      className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-colors ${
+                        peopleTab === 'crew'
+                          ? 'bg-primary-600 text-white'
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      }`}
                     >
-                      Show Less
+                      Crew ({groupedCrew.length})
                     </button>
-                  )}
+                  </div>
+                  {(() => {
+                    const total = peopleTab === 'cast' ? cast.length : groupedCrew.length;
+                    const cap = peopleTab === 'cast' ? 10 : 12;
+                    if (total > cap && !showAllCast) {
+                      return (
+                        <button
+                          onClick={() => setShowAllCast(true)}
+                          className="text-primary-500 hover:text-primary-400 font-medium text-sm transition-colors"
+                        >
+                          View All ({total})
+                        </button>
+                      );
+                    }
+                    if (showAllCast) {
+                      return (
+                        <button
+                          onClick={() => setShowAllCast(false)}
+                          className="text-primary-500 hover:text-primary-400 font-medium text-sm transition-colors"
+                        >
+                          Show Less
+                        </button>
+                      );
+                    }
+                    return null;
+                  })()}
                 </div>
                 <div className={showAllCast ? 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4' : 'flex overflow-x-auto gap-4 pb-4 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-gray-800'}>
-                  {(showAllCast ? cast : cast.slice(0, 10)).map((member) => (
-                    <Link
-                      key={member.id}
-                      to={`/person/${member.id}`}
-                      className={`${showAllCast ? '' : 'flex-none'} w-36 bg-gray-800 rounded-lg overflow-hidden shadow-lg hover:shadow-xl transition-all group`}
-                    >
-                      <img
-                        src={tmdbService.getImageUrl(member.profile_path, 'w500')}
-                        alt={member.name}
-                        className="w-full h-44 object-cover group-hover:opacity-75 transition-opacity"
-                      />
-                      <div className="p-3">
-                        <p className="font-semibold text-white text-sm truncate group-hover:text-blue-500 transition-colors">{member.name}</p>
-                        <p className="text-gray-400 text-xs truncate">{member.character}</p>
-                      </div>
-                    </Link>
-                  ))}
+                  {peopleTab === 'cast'
+                    ? (showAllCast ? cast : cast.slice(0, 10)).map((member) => (
+                        <CreditCard
+                          key={`cast-${member.id}`}
+                          personId={member.id}
+                          name={member.name}
+                          role={member.character}
+                          profilePath={member.profile_path}
+                          isFollowed={followedIds.has(member.id)}
+                          onToggleFollow={() =>
+                            toggleFollowPerson(member.id, member.name, member.profile_path, member.character)
+                          }
+                        />
+                      ))
+                    : (showAllCast ? groupedCrew : groupedCrew.slice(0, 12)).map((c) => {
+                        const role = c.jobs.join(', ');
+                        return (
+                          <CreditCard
+                            key={`crew-${c.id}`}
+                            personId={c.id}
+                            name={c.name}
+                            role={role}
+                            profilePath={c.profile_path}
+                            isFollowed={followedIds.has(c.id)}
+                            onToggleFollow={() =>
+                              toggleFollowPerson(c.id, c.name, c.profile_path, role)
+                            }
+                          />
+                        );
+                      })}
                 </div>
               </div>
             )}

@@ -4,6 +4,8 @@ import { FeelingLucky } from '../components/discovery/FeelingLucky';
 import { MoodDiscovery } from '../components/discovery/MoodDiscovery';
 import { GenreBrowser } from '../components/discovery/GenreBrowser';
 import { GenreResults } from '../components/discovery/GenreResults';
+import { StreamingBrowser } from '../components/discovery/StreamingBrowser';
+import { NetworkResults } from '../components/discovery/NetworkResults';
 import { MediaCard } from '../components/media/MediaCard';
 import { tmdbService } from '../services/tmdb';
 import { userSettingsService } from '../services/userSettings';
@@ -30,6 +32,7 @@ function feedItemToMedia(it: FollowedFeedItem): Movie | TVShow {
 export default function DiscoveryPage() {
   const { user } = useAuth();
   const [selectedGenre, setSelectedGenre] = useState<{ id: number; name: string } | null>(null);
+  const [selectedProvider, setSelectedProvider] = useState<{ id: number; name: string } | null>(null);
   const [trendingToday, setTrendingToday] = useState<Array<Movie | TVShow>>([]);
   const [loadingTrending, setLoadingTrending] = useState(true);
   const [englishOnly, setEnglishOnly] = useState(false);
@@ -119,6 +122,18 @@ export default function DiscoveryPage() {
   const handleBackToGenres = () => {
     setSelectedGenre(null);
   };
+
+  if (selectedProvider) {
+    return (
+      <Layout>
+        <NetworkResults
+          providerId={selectedProvider.id}
+          providerName={selectedProvider.name}
+          onBack={() => setSelectedProvider(null)}
+        />
+      </Layout>
+    );
+  }
 
   if (selectedGenre) {
     return (
@@ -226,6 +241,10 @@ export default function DiscoveryPage() {
         )}
 
         <MoodDiscovery />
+
+        <StreamingBrowser
+          onSelect={(id, name) => setSelectedProvider({ id, name })}
+        />
 
         <GenreBrowser onGenreSelect={handleGenreSelect} />
       </div>

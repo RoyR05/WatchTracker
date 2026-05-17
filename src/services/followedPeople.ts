@@ -51,6 +51,20 @@ export const followedPeopleService = {
     return (data ?? []) as FollowedPerson[];
   },
 
+  async listFollowedIds(): Promise<Set<number>> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return new Set();
+    const { data, error } = await supabase
+      .from('followed_people')
+      .select('person_id')
+      .eq('user_id', user.id);
+    if (error) {
+      console.error('listFollowedIds failed:', error);
+      return new Set();
+    }
+    return new Set((data ?? []).map((r) => r.person_id as number));
+  },
+
   async isFollowing(personId: number): Promise<boolean> {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return false;

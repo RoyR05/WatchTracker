@@ -77,6 +77,7 @@ export interface CrewMember {
   name: string;
   job: string;
   department: string;
+  profile_path?: string | null;
 }
 
 export interface Credits {
