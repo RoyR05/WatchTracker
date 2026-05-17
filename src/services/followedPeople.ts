@@ -115,6 +115,7 @@ export const followedPeopleService = {
 
     const now = Date.now();
     const byKey = new Map<string, FollowedFeedItem>();
+    const noDate = new Map<string, FollowedFeedItem>();
 
     // Bounded-concurrency fan-out (chunks of 5) instead of a sequential
     // sleep loop — much faster first build, still gentle on the proxy.
@@ -144,7 +145,23 @@ export const followedPeopleService = {
           const mediaType: 'movie' | 'tv' =
             e.media_type === 'tv' ? 'tv' : e.media_type === 'movie' ? 'movie' : ('title' in e ? 'movie' : 'tv');
           const date: string = e.release_date || e.first_air_date || '';
-          if (!date) continue;
+          if (!date) {
+            // Include announced-but-undated titles if they have meaningful popularity
+            const key = `${e.id}-${mediaType}`;
+            if (!byKey.has(key) && !noDate.has(key) && (e.popularity ?? 0) >= 2) {
+              noDate.set(key, {
+                tmdb_id: e.id,
+                media_type: mediaType,
+                title: e.title || e.name || 'Untitled',
+                poster_path: e.poster_path ?? null,
+                year: null,
+                vote_average: e.vote_average ?? 0,
+                release_date: '',
+                person_name: p.name,
+              });
+            }
+            continue;
+          }
           const t = new Date(date).getTime();
           if (Number.isNaN(t)) continue;
           // upcoming OR released within the last 30 days
@@ -166,9 +183,12 @@ export const followedPeopleService = {
       }
     }
 
-    return Array.from(byKey.values())
-      .sort((a, b) => b.release_date.localeCompare(a.release_date))
-      .slice(0, 40);
+    const dated = Array.from(byKey.values())
+      .sort((a, b) => b.release_date.localeCompare(a.release_date));
+    const undated = Array.from(noDate.values())
+      .filter(item => !byKey.has(`${item.tmdb_id}-${item.media_type}`))
+      .sort((a, b) => b.vote_average - a.vote_average);
+    return [...dated, ...undated].slice(0, 40);
   },
 
   // Daily DB-backed cache. Recomputes at most once per 24h per user.
