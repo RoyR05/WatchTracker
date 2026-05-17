@@ -4,6 +4,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useAdmin } from '../../hooks/useAdmin';
 import { supabase } from '../../lib/supabase';
 import { checkUpcomingEpisodeNotifications } from '../../services/episodeNotifications';
+import { OnboardingTour } from '../onboarding/OnboardingTour';
+import { HelpPanel } from '../help/HelpPanel';
 
 interface LayoutProps {
   children: ReactNode;
@@ -14,6 +16,15 @@ export function Layout({ children }: LayoutProps) {
   const { isAdmin } = useAdmin();
   const [pendingCount, setPendingCount] = useState(0);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [tourOpen, setTourOpen] = useState(false);
+
+  // First-run: auto-open the welcome tour once per account.
+  useEffect(() => {
+    if (profile && profile.approval_status === 'approved' && !profile.onboarded_at) {
+      setTourOpen(true);
+    }
+  }, [profile]);
 
   useEffect(() => {
     if (user) {
@@ -217,6 +228,16 @@ export function Layout({ children }: LayoutProps) {
               </div>
             </div>
             <div className="flex items-center space-x-4">
+              <button
+                onClick={() => setHelpOpen(true)}
+                className="text-gray-300 hover:text-white transition-colors"
+                aria-label="Help"
+                title="Help"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </button>
               <NavLink
                 to="/notifications"
                 className="relative text-gray-300 hover:text-white transition-colors"
@@ -364,6 +385,16 @@ export function Layout({ children }: LayoutProps) {
           </NavLink>
         </div>
       </nav>
+
+      <OnboardingTour open={tourOpen} onClose={() => setTourOpen(false)} />
+      <HelpPanel
+        open={helpOpen}
+        onClose={() => setHelpOpen(false)}
+        onReplayTour={() => {
+          setHelpOpen(false);
+          setTourOpen(true);
+        }}
+      />
     </div>
   );
 }

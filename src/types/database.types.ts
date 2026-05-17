@@ -19,6 +19,7 @@ export interface Database {
           approved_by: string | null
           approved_at: string | null
           can_broadcast: boolean
+          onboarded_at: string | null
           created_at: string
           updated_at: string
         }
@@ -31,6 +32,7 @@ export interface Database {
           approved_by?: string | null
           approved_at?: string | null
           can_broadcast?: boolean
+          onboarded_at?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -43,6 +45,7 @@ export interface Database {
           approved_by?: string | null
           approved_at?: string | null
           can_broadcast?: boolean
+          onboarded_at?: string | null
           created_at?: string
           updated_at?: string
         }

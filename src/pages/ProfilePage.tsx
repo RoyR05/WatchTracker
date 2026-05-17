@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { Layout } from '../components/layout/Layout';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -42,11 +42,26 @@ export default function ProfilePage() {
   const [englishOnly, setEnglishOnly] = useState(false);
   const [preferredGenres, setPreferredGenres] = useState<number[]>([]);
   const genreSaveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const location = useLocation();
+  const [highlightDiscovery, setHighlightDiscovery] = useState(false);
 
   useEffect(() => {
     userSettingsService.getEnglishOnlyFilter().then(setEnglishOnly);
     userSettingsService.getPreferredGenres().then(setPreferredGenres);
   }, []);
+
+  // Deep-link from the onboarding tour: /profile#discovery-preferences
+  useEffect(() => {
+    if (location.hash !== '#discovery-preferences') return;
+    const el = document.getElementById('discovery-preferences');
+    if (!el) return;
+    const t = setTimeout(() => {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setHighlightDiscovery(true);
+      setTimeout(() => setHighlightDiscovery(false), 2400);
+    }, 250);
+    return () => clearTimeout(t);
+  }, [location.hash]);
 
   async function toggleEnglishOnly() {
     const newValue = !englishOnly;
@@ -280,7 +295,12 @@ export default function ProfilePage() {
           <ChangePassword />
 
           {/* Discovery Preferences */}
-          <div className="bg-gray-800 rounded-lg p-6">
+          <div
+            id="discovery-preferences"
+            className={`bg-gray-800 rounded-lg p-6 transition-all duration-500 ${
+              highlightDiscovery ? 'ring-2 ring-primary-500 ring-offset-2 ring-offset-gray-900' : ''
+            }`}
+          >
             <h2 className="text-lg font-semibold text-white mb-4">Discovery Preferences</h2>
 
             {/* English Only toggle */}

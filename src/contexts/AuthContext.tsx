@@ -15,6 +15,7 @@ interface AuthContextType {
   signInWithGoogle: () => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<Profile>) => Promise<{ error: Error | null }>;
+  markOnboarded: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -197,6 +198,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  async function markOnboarded() {
+    if (!user || !profile || profile.onboarded_at) return;
+    const ts = new Date().toISOString();
+    setProfile({ ...profile, onboarded_at: ts }); // optimistic — close tour instantly
+    try {
+      await supabase.from('profiles').update({ onboarded_at: ts }).eq('id', user.id);
+    } catch (error) {
+      console.error('[Auth] markOnboarded failed:', error);
+    }
+  }
+
   const value = {
     user,
     profile,
@@ -207,6 +219,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signInWithGoogle,
     signOut,
     updateProfile,
+    markOnboarded,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

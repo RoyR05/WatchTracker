@@ -5,7 +5,6 @@ import { Layout } from '../components/layout/Layout';
 import { MediaCard } from '../components/media/MediaCard';
 import { HorizontalScrollSection } from '../components/ui/HorizontalScrollSection';
 import { SkeletonGrid } from '../components/ui/Skeleton';
-import { GestureTutorial } from '../components/ui/GestureTutorial';
 import { MediaTypeSwitcher } from '../components/ui/MediaTypeSwitcher';
 import { CollapsibleSection } from '../components/ui/CollapsibleSection';
 import { useToast } from '../contexts/ToastContext';
@@ -259,7 +258,6 @@ export default function Dashboard() {
 
   return (
     <Layout>
-      <GestureTutorial />
       <div className="space-y-8">
 
         {/* Currently Watching */}
