@@ -231,6 +231,31 @@ export function Layout({ children }: LayoutProps) {
               </div>
             </div>
             <div className="flex items-center space-x-4">
+              <NavLink
+                to="/calendar"
+                className="md:hidden text-gray-300 hover:text-white transition-colors"
+                aria-label="Calendar"
+                title="Calendar"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </NavLink>
+              <NavLink
+                to="/recommendations"
+                className="md:hidden relative text-gray-300 hover:text-white transition-colors"
+                aria-label="Recommendations"
+                title="Recommendations"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                </svg>
+                {pendingCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                    {pendingCount}
+                  </span>
+                )}
+              </NavLink>
               <button
                 onClick={() => setHelpOpen(true)}
                 className="text-gray-300 hover:text-white transition-colors"
@@ -283,7 +308,7 @@ export function Layout({ children }: LayoutProps) {
               </NavLink>
               <button
                 onClick={signOut}
-                className="px-3 py-2 text-sm font-medium text-gray-300 hover:text-white transition-colors"
+                className="hidden md:block px-3 py-2 text-sm font-medium text-gray-300 hover:text-white transition-colors"
               >
                 Sign Out
               </button>
@@ -330,7 +355,7 @@ export function Layout({ children }: LayoutProps) {
             <span className="text-xs mt-1">Home</span>
           </NavLink>
           <NavLink
-            to="/calendar"
+            to="/discovery"
             className={({ isActive }) =>
               `flex-1 flex flex-col items-center justify-center py-3 ${
                 isActive ? 'text-primary-500' : 'text-gray-400'
@@ -338,9 +363,9 @@ export function Layout({ children }: LayoutProps) {
             }
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 3l1.9 5.7a2 2 0 001.4 1.4L22 12l-5.7 1.9a2 2 0 00-1.4 1.4L13 21l-1.9-5.7a2 2 0 00-1.4-1.4L4 12l5.7-1.9a2 2 0 001.4-1.4L13 3z" />
             </svg>
-            <span className="text-xs mt-1">Calendar</span>
+            <span className="text-xs mt-1">Discover</span>
           </NavLink>
           <NavLink
             to="/search"
@@ -369,22 +394,17 @@ export function Layout({ children }: LayoutProps) {
             <span className="text-xs mt-1">Watchlist</span>
           </NavLink>
           <NavLink
-            to="/recommendations"
+            to="/lists"
             className={({ isActive }) =>
-              `flex-1 flex flex-col items-center justify-center py-3 relative ${
+              `flex-1 flex flex-col items-center justify-center py-3 ${
                 isActive ? 'text-primary-500' : 'text-gray-400'
               }`
             }
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" />
             </svg>
-            {pendingCount > 0 && (
-              <span className="absolute top-1 right-1/4 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
-                {pendingCount > 9 ? '9+' : pendingCount}
-              </span>
-            )}
-            <span className="text-xs mt-1">Recs</span>
+            <span className="text-xs mt-1">My Lists</span>
           </NavLink>
         </div>
       </nav>

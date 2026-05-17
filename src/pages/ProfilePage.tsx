@@ -26,7 +26,7 @@ const AVAILABLE_GENRES = [
 ];
 
 export default function ProfilePage() {
-  const { user, profile, updateProfile } = useAuth();
+  const { user, profile, updateProfile, signOut } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [username, setUsername] = useState(profile?.username || '');
   const [bio, setBio] = useState(profile?.bio || '');
@@ -368,6 +368,19 @@ export default function ProfilePage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </Link>
+          </div>
+
+          <div className="bg-gray-800 rounded-lg p-6">
+            <h2 className="text-lg font-semibold text-white mb-4">Account</h2>
+            <button
+              onClick={signOut}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gray-700/50 hover:bg-gray-700 text-white font-medium rounded-lg transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+              Sign Out
+            </button>
           </div>
         </div>
       </div>
