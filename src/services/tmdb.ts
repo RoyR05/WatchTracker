@@ -294,14 +294,15 @@ export const tmdbService = {
     mediaType: 'movie' | 'tv',
     providerId: number,
     page = 1,
-    sortBy: 'popularity.desc' | 'primary_release_date.desc' | 'first_air_date.desc' = 'popularity.desc'
+    sortBy: 'popularity.desc' | 'primary_release_date.desc' | 'first_air_date.desc' | 'vote_average.desc' = 'popularity.desc',
+    minVotes = 20
   ): Promise<{ results: Array<Movie | TVShow>; total_pages: number }> => {
     return tmdbFetch(`/discover/${mediaType}`, {
       page: page.toString(),
       with_watch_providers: providerId.toString(),
       watch_region: 'US',
       sort_by: sortBy,
-      'vote_count.gte': '20',
+      'vote_count.gte': minVotes.toString(),
     });
   },
 
