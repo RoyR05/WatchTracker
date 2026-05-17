@@ -358,6 +358,32 @@ export interface Database {
           created_at?: string
         }
       }
+      followed_feed_hidden: {
+        Row: {
+          id: string
+          user_id: string
+          tmdb_id: number
+          media_type: string
+          had_date_when_hidden: boolean
+          hidden_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          tmdb_id: number
+          media_type: string
+          had_date_when_hidden?: boolean
+          hidden_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          tmdb_id?: number
+          media_type?: string
+          had_date_when_hidden?: boolean
+          hidden_at?: string
+        }
+      }
       followed_feed_cache: {
         Row: {
           user_id: string

@@ -108,6 +108,35 @@ export const followedPeopleService = {
     return { success: true };
   },
 
+  async getHiddenItems(): Promise<Array<{ tmdb_id: number; media_type: string; had_date_when_hidden: boolean }>> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return [];
+    const { data } = await supabase
+      .from('followed_feed_hidden')
+      .select('tmdb_id, media_type, had_date_when_hidden')
+      .eq('user_id', user.id);
+    return data ?? [];
+  },
+
+  async hideFromFeed(tmdbId: number, mediaType: 'movie' | 'tv', hadDate: boolean): Promise<void> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    await supabase.from('followed_feed_hidden').upsert(
+      { user_id: user.id, tmdb_id: tmdbId, media_type: mediaType, had_date_when_hidden: hadDate },
+      { onConflict: 'user_id,tmdb_id,media_type' }
+    );
+  },
+
+  async unhideFromFeed(tmdbId: number, mediaType: 'movie' | 'tv'): Promise<void> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    await supabase.from('followed_feed_hidden')
+      .delete()
+      .eq('user_id', user.id)
+      .eq('tmdb_id', tmdbId)
+      .eq('media_type', mediaType);
+  },
+
   // Scan followed people's combined credits for upcoming / just-released titles.
   async computeNewReleasesFromFollowed(): Promise<FollowedFeedItem[]> {
     const people = await this.listFollowed();
@@ -116,6 +145,12 @@ export const followedPeopleService = {
     const now = Date.now();
     const byKey = new Map<string, FollowedFeedItem>();
     const noDate = new Map<string, FollowedFeedItem>();
+
+    // Load hidden items so we can skip or auto-resurface them
+    const hiddenItems = await this.getHiddenItems();
+    const hiddenMap = new Map<string, { tmdb_id: number; media_type: string; had_date_when_hidden: boolean }>(
+      hiddenItems.map(h => [`${h.tmdb_id}-${h.media_type}`, h])
+    );
 
     // Bounded-concurrency fan-out (chunks of 5) instead of a sequential
     // sleep loop — much faster first build, still gentle on the proxy.
@@ -145,10 +180,13 @@ export const followedPeopleService = {
           const mediaType: 'movie' | 'tv' =
             e.media_type === 'tv' ? 'tv' : e.media_type === 'movie' ? 'movie' : ('title' in e ? 'movie' : 'tv');
           const date: string = e.release_date || e.first_air_date || '';
+          const key = `${e.id}-${mediaType}`;
+
           if (!date) {
-            // Include announced-but-undated titles if they have meaningful popularity
-            const key = `${e.id}-${mediaType}`;
+            // Include announced-but-undated titles
             if (!byKey.has(key) && !noDate.has(key)) {
+              const hidden = hiddenMap.get(key);
+              if (hidden) continue; // still hidden (no date yet = still vaporware)
               noDate.set(key, {
                 tmdb_id: e.id,
                 media_type: mediaType,
@@ -162,12 +200,24 @@ export const followedPeopleService = {
             }
             continue;
           }
+
+          // Item now has a date — check if it was hidden when undated (auto-resurface)
+          const hidden = hiddenMap.get(key);
+          if (hidden) {
+            if (!hidden.had_date_when_hidden) {
+              // Was hidden as undated, now has a date → auto-resurface (remove from hidden)
+              this.unhideFromFeed(e.id, mediaType);
+              // Fall through to include the item
+            } else {
+              continue; // Hidden when dated → stay hidden
+            }
+          }
+
           const t = new Date(date).getTime();
           if (Number.isNaN(t)) continue;
           // upcoming OR released within the last 30 days
           if (t < now - THIRTY_DAYS_MS) continue;
 
-          const key = `${e.id}-${mediaType}`;
           if (byKey.has(key)) continue;
           byKey.set(key, {
             tmdb_id: e.id,

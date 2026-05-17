@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Layout } from '../components/layout/Layout';
 import { FeelingLucky } from '../components/discovery/FeelingLucky';
 import { MoodDiscovery } from '../components/discovery/MoodDiscovery';
@@ -37,9 +37,11 @@ export default function DiscoveryPage() {
   const [loadingTrending, setLoadingTrending] = useState(true);
   const [englishOnly, setEnglishOnly] = useState(false);
   const [preferenceMap, setPreferenceMap] = useState<Map<string, 'like' | 'dislike'>>(new Map());
+  const [rawFollowedItems, setRawFollowedItems] = useState<FollowedFeedItem[]>([]);
   const [followedItems, setFollowedItems] = useState<Array<Movie | TVShow>>([]);
   const [loadingFollowed, setLoadingFollowed] = useState(true);
   const [followedPrefMap, setFollowedPrefMap] = useState<Map<string, 'like' | 'dislike'>>(new Map());
+  const [followedPersonFilter, setFollowedPersonFilter] = useState<string>('all');
 
   useEffect(() => {
     if (!user || trendingToday.length === 0) return;
@@ -79,6 +81,8 @@ export default function DiscoveryPage() {
         const visible = feed.filter(f => !onList.has(`${f.tmdb_id}-${f.media_type}`));
         if (cancelled) return;
 
+        setRawFollowedItems(visible);
+        setFollowedPersonFilter('all');
         const media = visible.map(feedItemToMedia);
         setFollowedItems(media);
 
@@ -122,6 +126,31 @@ export default function DiscoveryPage() {
   const handleBackToGenres = () => {
     setSelectedGenre(null);
   };
+
+  const followedPeople = useMemo(() =>
+    Array.from(new Set(rawFollowedItems.map(i => i.person_name))).sort(),
+    [rawFollowedItems]
+  );
+
+  const visibleFollowed = useMemo(() => {
+    const filtered = followedPersonFilter === 'all'
+      ? rawFollowedItems
+      : rawFollowedItems.filter(i => i.person_name === followedPersonFilter);
+    return filtered.map(feedItemToMedia);
+  }, [rawFollowedItems, followedPersonFilter]);
+
+  async function hideFollowedItem(tmdbId: number) {
+    const raw = rawFollowedItems.find(i => i.tmdb_id === tmdbId);
+    const mediaType = raw?.media_type ?? (followedItems.find(i => i.id === tmdbId) && 'title' in followedItems.find(i => i.id === tmdbId)! ? 'movie' : 'tv');
+    const hadDate = !!(raw?.release_date);
+    await followedPeopleService.hideFromFeed(tmdbId, mediaType as 'movie' | 'tv', hadDate);
+    setRawFollowedItems(prev => prev.filter(i => i.tmdb_id !== tmdbId));
+    setFollowedItems(prev => prev.filter(i => i.id !== tmdbId));
+    // Invalidate cache so next reload recomputes without this item
+    if (user) {
+      await supabase.from('followed_feed_cache').delete().eq('user_id', user.id);
+    }
+  }
 
   if (selectedProvider) {
     return (
@@ -204,10 +233,34 @@ export default function DiscoveryPage() {
         {(loadingFollowed || followedItems.length > 0) && (
           <section>
             <div className="bg-gradient-to-r from-gray-800/50 to-gray-900/50 backdrop-blur-sm rounded-2xl p-6 border border-gray-700">
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center justify-between mb-2">
                 <h2 className="text-xl font-bold text-white">From People You Follow</h2>
                 <span className="text-sm text-gray-400">New &amp; upcoming</span>
               </div>
+
+              {followedPeople.length >= 2 && (
+                <div className="flex gap-2 overflow-x-auto pb-3 scrollbar-hide">
+                  <button
+                    onClick={() => setFollowedPersonFilter('all')}
+                    className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0 transition-colors ${
+                      followedPersonFilter === 'all'
+                        ? 'bg-primary-600 text-white'
+                        : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                    }`}
+                  >All</button>
+                  {followedPeople.map(name => (
+                    <button
+                      key={name}
+                      onClick={() => setFollowedPersonFilter(name)}
+                      className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0 transition-colors ${
+                        followedPersonFilter === name
+                          ? 'bg-primary-600 text-white'
+                          : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                      }`}
+                    >{name}</button>
+                  ))}
+                </div>
+              )}
 
               {loadingFollowed ? (
                 <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
@@ -219,7 +272,7 @@ export default function DiscoveryPage() {
                 </div>
               ) : (
                 <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide snap-x snap-mandatory">
-                  {followedItems.map((item) => {
+                  {visibleFollowed.map((item) => {
                     const mt = 'title' in item ? 'movie' : 'tv';
                     return (
                       <div key={`${item.id}-${mt}`} className="flex-shrink-0 w-32 sm:w-40 snap-start">
@@ -227,9 +280,11 @@ export default function DiscoveryPage() {
                           item={item}
                           mediaType={mt}
                           initialPreference={followedPrefMap.get(`${item.id}-${mt}`) ?? null}
-                          onDislike={(id) =>
-                            setFollowedItems((prev) => prev.filter((x) => x.id !== id))
-                          }
+                          onDislike={(id) => {
+                            setRawFollowedItems(prev => prev.filter(x => x.tmdb_id !== id));
+                            setFollowedItems(prev => prev.filter(x => x.id !== id));
+                          }}
+                          onHide={hideFollowedItem}
                         />
                       </div>
                     );
