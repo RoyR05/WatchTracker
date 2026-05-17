@@ -33,6 +33,7 @@ export interface MovieDetails extends Movie {
 export interface TVShowDetails extends TVShow {
   number_of_seasons: number;
   number_of_episodes: number;
+  created_by?: Array<{ id: number; name: string; profile_path: string | null }>;
   genres: Array<{ id: number; name: string }>;
   seasons: Array<{
     id: number;

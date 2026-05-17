@@ -59,27 +59,65 @@ export default function DetailPage() {
   const crew = credits?.crew ?? [];
 
   // Group crew so each person appears once with their combined roles,
-  // ordered Directing → Writing → Production → everything else.
-  const DEPT_RANK: Record<string, number> = { Directing: 0, Writing: 1, Production: 2 };
+  // ranked by JOB importance (not TMDB's "department", which mis-files
+  // Script Supervisor under Directing, Casting under Production, etc.).
+  // TV show Creators (from details.created_by, usually absent in /credits)
+  // are merged in at the top.
+  const JOB_ORDER = [
+    'Creator',
+    'Showrunner',
+    'Executive Producer',
+    'Co-Executive Producer',
+    'Director',
+    'Writer',
+    'Screenplay',
+    'Teleplay',
+    'Story',
+    'Producer',
+    'Supervising Producer',
+    'Co-Producer',
+    'Associate Producer',
+    'Original Music Composer',
+    'Director of Photography',
+    'Editor',
+    'Production Design',
+  ];
+  const JOB_PRIORITY: Record<string, number> = Object.fromEntries(
+    JOB_ORDER.map((j, i) => [j, i])
+  );
+  const jobRank = (job: string) => JOB_PRIORITY[job] ?? 999;
+
   const groupedCrew = (() => {
-    const map = new Map<number, { id: number; name: string; profile_path: string | null; jobs: string[]; rank: number }>();
-    for (const c of crew) {
-      const existing = map.get(c.id);
-      const rank = DEPT_RANK[c.department] ?? 3;
+    const map = new Map<number, { id: number; name: string; profile_path: string | null; jobs: string[] }>();
+
+    const addEntry = (id: number, name: string, profile_path: string | null, job: string) => {
+      const existing = map.get(id);
       if (existing) {
-        if (!existing.jobs.includes(c.job)) existing.jobs.push(c.job);
-        existing.rank = Math.min(existing.rank, rank);
+        if (!existing.jobs.includes(job)) existing.jobs.push(job);
       } else {
-        map.set(c.id, {
-          id: c.id,
-          name: c.name,
-          profile_path: c.profile_path ?? null,
-          jobs: [c.job],
-          rank,
-        });
+        map.set(id, { id, name, profile_path: profile_path ?? null, jobs: [job] });
+      }
+    };
+
+    // TV Creators first (so a creator who is also EP dedupes to one card)
+    if (mediaType === 'tv' && details && 'created_by' in details && Array.isArray(details.created_by)) {
+      for (const cr of details.created_by) {
+        addEntry(cr.id, cr.name, cr.profile_path ?? null, 'Creator');
       }
     }
-    return Array.from(map.values()).sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name));
+
+    for (const c of crew) {
+      addEntry(c.id, c.name, c.profile_path ?? null, c.job);
+    }
+
+    return Array.from(map.values())
+      .map((p) => ({
+        ...p,
+        // most important job first in the displayed label
+        jobs: [...p.jobs].sort((a, b) => jobRank(a) - jobRank(b)),
+        rank: Math.min(...p.jobs.map(jobRank)),
+      }))
+      .sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name));
   })();
   const videos: Video[] = (videosData?.results ?? []).filter(v => v.site === 'YouTube');
   const loading = detailsLoading;
