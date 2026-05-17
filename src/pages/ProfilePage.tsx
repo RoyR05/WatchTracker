@@ -85,6 +85,40 @@ export default function ProfilePage() {
     });
   }, []);
 
+  async function compressImage(file: File, maxBytes = 2 * 1024 * 1024): Promise<File> {
+    if (file.size <= maxBytes) return file;
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const MAX_DIM = 1200;
+        let { width, height } = img;
+        if (width > MAX_DIM || height > MAX_DIM) {
+          if (width >= height) { height = Math.round((height / width) * MAX_DIM); width = MAX_DIM; }
+          else { width = Math.round((width / height) * MAX_DIM); height = MAX_DIM; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext('2d')!.drawImage(img, 0, 0, width, height);
+        const tryQuality = (q: number) => {
+          canvas.toBlob(blob => {
+            if (!blob) { reject(new Error('Compression failed')); return; }
+            if (blob.size <= maxBytes || q <= 0.4) {
+              resolve(new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' }));
+            } else {
+              tryQuality(q - 0.15);
+            }
+          }, 'image/jpeg', q);
+        };
+        tryQuality(0.85);
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Could not load image')); };
+      img.src = url;
+    });
+  }
+
   async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file || !user) return;
@@ -94,20 +128,26 @@ export default function ProfilePage() {
       setUploadError('Please select a JPG, PNG, WebP, or GIF image.');
       return;
     }
+
+    let fileToUpload = file;
     if (file.size > 2 * 1024 * 1024) {
-      setUploadError('Image must be under 2 MB.');
-      return;
+      try {
+        fileToUpload = await compressImage(file);
+      } catch {
+        setUploadError('Could not compress image. Please try a smaller file.');
+        return;
+      }
     }
 
     setUploadError('');
     setUploading(true);
     try {
-      const ext = file.name.split('.').pop() ?? 'jpg';
+      const ext = fileToUpload.name.split('.').pop() ?? 'jpg';
       const path = `${user.id}/${Date.now()}.${ext}`;
 
       const { error: uploadErr } = await supabase.storage
         .from('avatars')
-        .upload(path, file, { upsert: true });
+        .upload(path, fileToUpload, { upsert: true });
       if (uploadErr) throw uploadErr;
 
       const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path);
