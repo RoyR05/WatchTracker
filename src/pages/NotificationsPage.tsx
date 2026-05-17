@@ -175,6 +175,19 @@ export function NotificationsPage() {
     }
   }
 
+  async function deleteNotification(id: number) {
+    const { error } = await supabase.from('notifications').delete().eq('id', id);
+    if (error) { console.error('Error deleting notification:', error); return; }
+    setNotifications(prev => prev.filter(n => n.id !== id));
+  }
+
+  async function clearAllNotifications() {
+    if (!user) return;
+    const { error } = await supabase.from('notifications').delete().eq('user_id', user.id);
+    if (error) { console.error('Error clearing notifications:', error); return; }
+    setNotifications([]);
+  }
+
   const filteredNotifications = filter === 'unread'
     ? notifications.filter(n => !n.is_read)
     : notifications;
@@ -190,14 +203,24 @@ export function NotificationsPage() {
               {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up!'}
             </p>
           </div>
-          {unreadCount > 0 && (
-            <button
-              onClick={markAllAsRead}
-              className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium transition-colors"
-            >
-              Mark All Read
-            </button>
-          )}
+          <div className="flex gap-2">
+            {unreadCount > 0 && (
+              <button
+                onClick={markAllAsRead}
+                className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium transition-colors"
+              >
+                Mark All Read
+              </button>
+            )}
+            {notifications.length > 0 && (
+              <button
+                onClick={clearAllNotifications}
+                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-medium transition-colors"
+              >
+                Clear All
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="flex space-x-2 mb-6">
@@ -262,9 +285,20 @@ export function NotificationsPage() {
                         <h3 className={`font-semibold text-sm ${notification.is_read ? 'text-gray-300' : 'text-white'}`}>
                           {notification.title}
                         </h3>
-                        <span className="text-gray-500 text-xs whitespace-nowrap flex-shrink-0">
-                          {new Date(notification.created_at).toLocaleDateString()}
-                        </span>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className="text-gray-500 text-xs whitespace-nowrap">
+                            {new Date(notification.created_at).toLocaleDateString()}
+                          </span>
+                          <button
+                            onClick={() => deleteNotification(notification.id)}
+                            className="text-gray-600 hover:text-gray-400 transition-colors"
+                            aria-label="Dismiss notification"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
                       </div>
                       <p className="text-gray-400 text-sm mb-2">{notification.message}</p>
 
