@@ -75,7 +75,7 @@ export function PersonPage() {
     return (
       <Layout>
         <div className="flex items-center justify-center min-h-screen">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500"></div>
         </div>
       </Layout>
     );
@@ -204,7 +204,7 @@ export function PersonPage() {
                     onClick={() => setActiveTab('movies')}
                     className={`px-4 py-2 font-medium transition-colors ${
                       activeTab === 'movies'
-                        ? 'text-blue-500 border-b-2 border-blue-500'
+                        ? 'text-primary-500 border-b-2 border-primary-500'
                         : 'text-gray-400 hover:text-white'
                     }`}
                   >
@@ -214,7 +214,7 @@ export function PersonPage() {
                     onClick={() => setActiveTab('tv')}
                     className={`px-4 py-2 font-medium transition-colors ${
                       activeTab === 'tv'
-                        ? 'text-blue-500 border-b-2 border-blue-500'
+                        ? 'text-primary-500 border-b-2 border-primary-500'
                         : 'text-gray-400 hover:text-white'
                     }`}
                   >

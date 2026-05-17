@@ -138,7 +138,7 @@ export default function AdminPlexRequestsPage() {
 
         {loading ? (
           <div className="flex items-center justify-center h-40">
-            <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-amber-500"></div>
+            <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-primary-500"></div>
           </div>
         ) : requests.length === 0 ? (
           <div className="text-center py-16 text-gray-400">
@@ -194,7 +194,7 @@ export default function AdminPlexRequestsPage() {
                             <button
                               onClick={() => handleAction(request.id, 'approved')}
                               disabled={isActioning}
-                              className="px-3 py-1.5 rounded-md bg-blue-600/30 text-blue-200 hover:bg-blue-600/50 text-xs font-medium transition-colors"
+                              className="px-3 py-1.5 rounded-md bg-primary-600/30 text-primary-200 hover:bg-primary-600/50 text-xs font-medium transition-colors"
                             >
                               Approve
                             </button>

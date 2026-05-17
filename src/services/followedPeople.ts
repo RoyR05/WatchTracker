@@ -31,10 +31,6 @@ export interface FollowedFeedItem {
 const DAY_MS = 24 * 60 * 60 * 1000;
 const THIRTY_DAYS_MS = 30 * DAY_MS;
 
-function sleep(ms: number) {
-  return new Promise((r) => setTimeout(r, ms));
-}
-
 export const followedPeopleService = {
   async listFollowed(): Promise<FollowedPerson[]> {
     const { data: { user } } = await supabase.auth.getUser();
@@ -120,10 +116,26 @@ export const followedPeopleService = {
     const now = Date.now();
     const byKey = new Map<string, FollowedFeedItem>();
 
-    for (let i = 0; i < people.length; i++) {
-      const p = people[i];
-      try {
-        const credits = await tmdbService.getPersonCombinedCredits(p.person_id);
+    // Bounded-concurrency fan-out (chunks of 5) instead of a sequential
+    // sleep loop — much faster first build, still gentle on the proxy.
+    const CHUNK = 5;
+    for (let i = 0; i < people.length; i += CHUNK) {
+      const chunk = people.slice(i, i + CHUNK);
+      const results = await Promise.all(
+        chunk.map(async (p) => {
+          try {
+            const credits = await tmdbService.getPersonCombinedCredits(p.person_id);
+            return { p, credits };
+          } catch (err) {
+            console.error(`combined_credits failed for ${p.name}:`, err instanceof Error ? err.message : err);
+            return null;
+          }
+        })
+      );
+
+      for (const r of results) {
+        if (!r) continue;
+        const { p, credits } = r;
         const entries = [
           ...((credits.cast as any[]) ?? []),
           ...((credits.crew as any[]) ?? []),
@@ -151,10 +163,7 @@ export const followedPeopleService = {
             person_name: p.name,
           });
         }
-      } catch (err) {
-        console.error(`combined_credits failed for ${p.name}:`, err);
       }
-      if (i < people.length - 1) await sleep(200);
     }
 
     return Array.from(byKey.values())

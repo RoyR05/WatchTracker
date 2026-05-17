@@ -11,7 +11,7 @@ function getCorsHeaders(req: Request) {
     origin.endsWith('.vercel.app') ||
     origin.startsWith('http://localhost') ||
     origin.startsWith('http://127.0.0.1');
-  const allowedOrigin = isAllowed ? origin : (SITE_URL || '*');
+  const allowedOrigin = isAllowed ? origin : (SITE_URL || 'https://rflixs.rainey.app');
   return {
     "Access-Control-Allow-Origin": allowedOrigin,
     "Access-Control-Allow-Methods": "GET, OPTIONS",

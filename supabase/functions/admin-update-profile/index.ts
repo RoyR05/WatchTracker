@@ -5,7 +5,7 @@ function getCorsHeaders(req: Request) {
   const siteUrl = Deno.env.get('SITE_URL') ?? '';
   const isAllowed = origin === siteUrl || origin.endsWith('.vercel.app') || origin.startsWith('http://localhost');
   return {
-    'Access-Control-Allow-Origin': isAllowed ? origin : (siteUrl || '*'),
+    'Access-Control-Allow-Origin': isAllowed ? origin : (siteUrl || 'https://rflixs.rainey.app'),
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Client-Info, Apikey',
   };

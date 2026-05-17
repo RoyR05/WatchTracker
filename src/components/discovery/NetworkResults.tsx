@@ -9,7 +9,7 @@ import { preferencesService } from '../../services/preferences';
 import type { Movie, TVShow } from '../../services/tmdb';
 
 interface NetworkResultsProps {
-  providerId: number;
+  providerId: number | string;
   providerName: string;
   onBack: () => void;
 }

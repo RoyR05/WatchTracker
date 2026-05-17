@@ -782,7 +782,7 @@ export default function DetailPage() {
 
                   {plexStatus === 'checking' && (
                     <div className="flex items-center gap-2 px-4 py-2 rounded-md bg-white/10 text-white/70 backdrop-blur-sm">
-                      <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-amber-400"></div>
+                      <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-primary-500"></div>
                       Checking Plex...
                     </div>
                   )}
@@ -850,7 +850,7 @@ export default function DetailPage() {
                           className="flex items-center gap-2 px-4 py-2 rounded-md bg-amber-600/30 text-amber-200 hover:bg-amber-600/50 font-medium transition-all backdrop-blur-sm"
                         >
                           {plexSubmitting ? (
-                            <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-amber-400"></div>
+                            <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-primary-500"></div>
                           ) : (
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />

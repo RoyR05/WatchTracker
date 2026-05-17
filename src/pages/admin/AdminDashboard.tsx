@@ -89,12 +89,12 @@ export function AdminDashboard() {
   }
 
   const statCards = [
-    { label: 'Total Users', value: stats.totalUsers, icon: '👥', color: 'bg-blue-600', link: '/admin/users' },
-    { label: 'Active Permissions', value: stats.activePermissions, icon: '🔐', color: 'bg-green-600', link: '/admin/permissions' },
-    { label: 'Unread Notifications', value: stats.unreadNotifications, icon: '🔔', color: 'bg-yellow-600', link: '/admin/notifications' },
-    { label: 'Total Lists', value: stats.totalLists, icon: '📝', color: 'bg-purple-600', link: '/admin/users' },
-    { label: 'Active Shares', value: stats.totalShares, icon: '🔗', color: 'bg-pink-600', link: '/admin/shares' },
-    { label: 'Recent Actions', value: stats.recentActions, icon: '📋', color: 'bg-indigo-600', link: '/admin/audit-log' },
+    { label: 'Total Users', value: stats.totalUsers, icon: '👥', color: 'bg-brand-card border border-white/10', link: '/admin/users' },
+    { label: 'Active Permissions', value: stats.activePermissions, icon: '🔐', color: 'bg-brand-card border border-white/10', link: '/admin/permissions' },
+    { label: 'Unread Notifications', value: stats.unreadNotifications, icon: '🔔', color: 'bg-brand-card border border-white/10', link: '/admin/notifications' },
+    { label: 'Total Lists', value: stats.totalLists, icon: '📝', color: 'bg-brand-card border border-white/10', link: '/admin/users' },
+    { label: 'Active Shares', value: stats.totalShares, icon: '🔗', color: 'bg-brand-card border border-white/10', link: '/admin/shares' },
+    { label: 'Recent Actions', value: stats.recentActions, icon: '📋', color: 'bg-brand-card border border-white/10', link: '/admin/audit-log' },
   ];
 
   if (loading) {
@@ -134,7 +134,7 @@ export function AdminDashboard() {
         <div className="bg-gray-800 rounded-lg p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-bold text-white">Recent Activity</h2>
-            <Link to="/admin/audit-log" className="text-blue-400 hover:text-blue-300 text-sm font-medium">
+            <Link to="/admin/audit-log" className="text-primary-400 hover:text-primary-300 text-sm font-medium">
               View All →
             </Link>
           </div>
@@ -147,7 +147,7 @@ export function AdminDashboard() {
                 <div key={action.id} className="flex items-start space-x-4 p-4 bg-gray-700 rounded-lg">
                   <div className="flex-1">
                     <div className="flex items-center space-x-2">
-                      <span className="text-blue-400 text-sm font-medium">{action.action_type}</span>
+                      <span className="text-primary-400 text-sm font-medium">{action.action_type}</span>
                       {action.target_user_email && (
                         <span className="text-gray-400 text-sm">→ {action.target_user_email}</span>
                       )}

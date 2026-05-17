@@ -291,7 +291,7 @@ export const FeelingLucky = () => {
     <button
       onClick={handleFeelingLucky}
       disabled={initialLoading || !user}
-      className="group relative overflow-hidden bg-gradient-to-r from-teal-600 via-cyan-600 to-blue-600 hover:from-teal-700 hover:via-cyan-700 hover:to-blue-700 text-white font-bold py-4 px-8 rounded-lg shadow-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105"
+      className="group relative overflow-hidden bg-gradient-to-r from-primary-600 via-primary-500 to-primary-700 hover:from-primary-700 hover:via-primary-600 hover:to-primary-800 text-white font-bold py-4 px-8 rounded-lg shadow-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105"
     >
       <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
       <div className="relative flex items-center gap-3">

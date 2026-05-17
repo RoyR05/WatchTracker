@@ -300,7 +300,7 @@ export const tmdbService = {
   // Browse a streaming service's catalog (TMDB watch-provider, US region).
   discoverByProvider: async (
     mediaType: 'movie' | 'tv',
-    providerId: number,
+    providerId: number | string,
     page = 1,
     sortBy: 'popularity.desc' | 'primary_release_date.desc' | 'first_air_date.desc' | 'vote_average.desc' = 'popularity.desc',
     minVotes = 20

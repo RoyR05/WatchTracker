@@ -32,7 +32,7 @@ function feedItemToMedia(it: FollowedFeedItem): Movie | TVShow {
 export default function DiscoveryPage() {
   const { user } = useAuth();
   const [selectedGenre, setSelectedGenre] = useState<{ id: number; name: string } | null>(null);
-  const [selectedProvider, setSelectedProvider] = useState<{ id: number; name: string } | null>(null);
+  const [selectedProvider, setSelectedProvider] = useState<{ id: number | string; name: string } | null>(null);
   const [trendingToday, setTrendingToday] = useState<Array<Movie | TVShow>>([]);
   const [loadingTrending, setLoadingTrending] = useState(true);
   const [englishOnly, setEnglishOnly] = useState(false);

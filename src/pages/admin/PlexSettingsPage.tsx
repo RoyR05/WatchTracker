@@ -92,7 +92,7 @@ export default function PlexSettingsPage() {
     return (
       <AdminLayout>
         <div className="flex items-center justify-center h-40">
-          <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-amber-500"></div>
+          <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-primary-500"></div>
         </div>
       </AdminLayout>
     );
@@ -121,7 +121,7 @@ export default function PlexSettingsPage() {
                   value={serverUrl}
                   onChange={e => setServerUrl(e.target.value)}
                   placeholder="Leave blank to auto-discover via Plex Cloud"
-                  className="w-full px-4 py-2.5 rounded-lg bg-gray-700 border border-gray-600 text-white placeholder-gray-400 focus:outline-none focus:border-amber-500 transition-colors"
+                  className="w-full px-4 py-2.5 rounded-lg bg-gray-700 border border-gray-600 text-white placeholder-gray-400 focus:outline-none focus:border-primary-500 transition-colors"
                 />
                 <p className="text-xs text-gray-400 mt-1.5">
                   {serverUrl.trim()
@@ -134,10 +134,10 @@ export default function PlexSettingsPage() {
                 <button
                   onClick={handleTest}
                   disabled={testing}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-600/30 text-amber-200 hover:bg-amber-600/50 font-medium text-sm transition-colors disabled:opacity-50"
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary-600/30 text-primary-200 hover:bg-primary-600/50 font-medium text-sm transition-colors disabled:opacity-50"
                 >
                   {testing ? (
-                    <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-amber-400"></div>
+                    <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-primary-500"></div>
                   ) : (
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -190,7 +190,7 @@ export default function PlexSettingsPage() {
                   <select
                     value={movieSectionId}
                     onChange={e => setMovieSectionId(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-lg bg-gray-700 border border-gray-600 text-white focus:outline-none focus:border-amber-500 transition-colors"
+                    className="w-full px-4 py-2.5 rounded-lg bg-gray-700 border border-gray-600 text-white focus:outline-none focus:border-primary-500 transition-colors"
                   >
                     <option value="">Auto-detect</option>
                     {movieSections.map(s => (
@@ -203,7 +203,7 @@ export default function PlexSettingsPage() {
                     value={movieSectionId}
                     onChange={e => setMovieSectionId(e.target.value)}
                     placeholder="Section ID (e.g., 1)"
-                    className="w-full px-4 py-2.5 rounded-lg bg-gray-700 border border-gray-600 text-white placeholder-gray-400 focus:outline-none focus:border-amber-500 transition-colors"
+                    className="w-full px-4 py-2.5 rounded-lg bg-gray-700 border border-gray-600 text-white placeholder-gray-400 focus:outline-none focus:border-primary-500 transition-colors"
                   />
                 )}
               </div>
@@ -216,7 +216,7 @@ export default function PlexSettingsPage() {
                   <select
                     value={tvSectionId}
                     onChange={e => setTvSectionId(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-lg bg-gray-700 border border-gray-600 text-white focus:outline-none focus:border-amber-500 transition-colors"
+                    className="w-full px-4 py-2.5 rounded-lg bg-gray-700 border border-gray-600 text-white focus:outline-none focus:border-primary-500 transition-colors"
                   >
                     <option value="">Auto-detect</option>
                     {tvSections.map(s => (
@@ -229,7 +229,7 @@ export default function PlexSettingsPage() {
                     value={tvSectionId}
                     onChange={e => setTvSectionId(e.target.value)}
                     placeholder="Section ID (e.g., 2)"
-                    className="w-full px-4 py-2.5 rounded-lg bg-gray-700 border border-gray-600 text-white placeholder-gray-400 focus:outline-none focus:border-amber-500 transition-colors"
+                    className="w-full px-4 py-2.5 rounded-lg bg-gray-700 border border-gray-600 text-white placeholder-gray-400 focus:outline-none focus:border-primary-500 transition-colors"
                   />
                 )}
               </div>
@@ -248,7 +248,7 @@ export default function PlexSettingsPage() {
           <button
             onClick={handleSave}
             disabled={saving}
-            className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-lg bg-amber-600 text-white font-semibold hover:bg-amber-500 transition-colors disabled:opacity-50"
+            className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-lg bg-primary-600 text-white font-semibold hover:bg-primary-700 transition-colors disabled:opacity-50"
           >
             {saving ? (
               <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white"></div>

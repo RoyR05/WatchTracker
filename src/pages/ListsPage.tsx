@@ -202,7 +202,7 @@ export default function ListsPage() {
                         setSelectedList(list);
                         setShowShareModal(true);
                       }}
-                      className="text-blue-400 hover:text-blue-300 transition-colors p-1"
+                      className="text-primary-400 hover:text-primary-300 transition-colors p-1"
                       title="Share list"
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -137,7 +137,7 @@ export function NotificationsPage() {
           </div>
           <button
             onClick={() => setShowComposer(!showComposer)}
-            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+            className="px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-medium"
           >
             {showComposer ? 'Cancel' : '+ New Notification'}
           </button>
@@ -190,7 +190,7 @@ export function NotificationsPage() {
               <select
                 value={notificationType}
                 onChange={(e) => setNotificationType(e.target.value)}
-                className="w-full px-4 py-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-blue-500 focus:outline-none"
+                className="w-full px-4 py-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-primary-500 focus:outline-none"
               >
                 <option value="announcement">Announcement</option>
                 <option value="update">Update</option>
@@ -208,7 +208,7 @@ export function NotificationsPage() {
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Notification title"
-                className="w-full px-4 py-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-blue-500 focus:outline-none"
+                className="w-full px-4 py-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-primary-500 focus:outline-none"
               />
             </div>
 
@@ -221,7 +221,7 @@ export function NotificationsPage() {
                 onChange={(e) => setMessage(e.target.value)}
                 placeholder="Notification message"
                 rows={4}
-                className="w-full px-4 py-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-blue-500 focus:outline-none"
+                className="w-full px-4 py-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-primary-500 focus:outline-none"
               />
             </div>
 
@@ -287,7 +287,7 @@ export function NotificationsPage() {
                         {notif.is_read ? (
                           <span className="text-gray-400">Read</span>
                         ) : (
-                          <span className="text-blue-400 font-medium">Unread</span>
+                          <span className="text-primary-400 font-medium">Unread</span>
                         )}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-300 whitespace-nowrap">

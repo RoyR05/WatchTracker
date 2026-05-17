@@ -178,7 +178,7 @@ export function SharesPage() {
           {blockedCount > 0 && (
             <button
               onClick={syncPermissions}
-              className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 font-medium"
+              className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-medium"
             >
               Sync Permissions ({blockedCount} blocked)
             </button>
@@ -191,7 +191,7 @@ export function SharesPage() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search by list name, owner, or recipient..."
-            className="w-full px-4 py-3 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-blue-500 focus:outline-none"
+            className="w-full px-4 py-3 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-primary-500 focus:outline-none"
           />
 
           <div className="flex space-x-2">
@@ -199,7 +199,7 @@ export function SharesPage() {
               onClick={() => setFilterType('all')}
               className={`px-4 py-2 rounded-lg font-medium ${
                 filterType === 'all'
-                  ? 'bg-blue-600 text-white'
+                  ? 'bg-primary-600 text-white'
                   : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
               }`}
             >

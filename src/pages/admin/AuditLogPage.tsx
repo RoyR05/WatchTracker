@@ -129,7 +129,7 @@ export function AuditLogPage() {
     if (actionType.includes('reset') || actionType.includes('updated')) {
       return 'bg-yellow-600';
     }
-    return 'bg-blue-600';
+    return 'bg-primary-600';
   }
 
   if (loading) {
@@ -150,7 +150,7 @@ export function AuditLogPage() {
           </div>
           <button
             onClick={exportToCSV}
-            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+            className="px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-medium"
           >
             Export to CSV
           </button>
@@ -162,7 +162,7 @@ export function AuditLogPage() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search by action, user, or details..."
-            className="w-full px-4 py-3 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-blue-500 focus:outline-none"
+            className="w-full px-4 py-3 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-primary-500 focus:outline-none"
           />
 
           <div>
@@ -172,7 +172,7 @@ export function AuditLogPage() {
             <select
               value={actionTypeFilter}
               onChange={(e) => setActionTypeFilter(e.target.value)}
-              className="w-full px-4 py-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-blue-500 focus:outline-none"
+              className="w-full px-4 py-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-primary-500 focus:outline-none"
             >
               {actionTypes.map((type) => (
                 <option key={type} value={type}>

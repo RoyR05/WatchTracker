@@ -30,7 +30,7 @@ export function AdminRoute({ children }: AdminRouteProps) {
           <h1 className="text-6xl font-bold text-red-500 mb-4">403</h1>
           <p className="text-white text-xl mb-8">Access Denied</p>
           <p className="text-gray-400">You do not have permission to access this area.</p>
-          <a href="/" className="mt-6 inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+          <a href="/" className="mt-6 inline-block px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700">
             Return Home
           </a>
         </div>

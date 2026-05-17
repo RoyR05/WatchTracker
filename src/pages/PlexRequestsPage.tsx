@@ -88,7 +88,7 @@ export default function PlexRequestsPage() {
 
         {loading ? (
           <div className="flex items-center justify-center h-40">
-            <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-amber-500"></div>
+            <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-primary-500"></div>
           </div>
         ) : filtered.length === 0 ? (
           <div className="text-center py-16 text-gray-400">

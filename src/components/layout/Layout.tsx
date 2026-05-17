@@ -233,7 +233,7 @@ export function Layout({ children }: LayoutProps) {
               {isAdmin && (
                 <NavLink
                   to="/admin"
-                  className="px-3 py-1.5 bg-orange-600 text-white text-sm font-medium rounded-md hover:bg-orange-700 transition-colors"
+                  className="px-3 py-1.5 bg-primary-600 text-white text-sm font-medium rounded-md hover:bg-primary-700 transition-colors"
                 >
                   Admin
                 </NavLink>
