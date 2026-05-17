@@ -87,12 +87,12 @@ export default function ProfilePage() {
 
   async function compressImage(file: File, maxBytes = 2 * 1024 * 1024): Promise<File> {
     if (file.size <= maxBytes) return file;
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       const img = new Image();
       const url = URL.createObjectURL(file);
       img.onload = () => {
         URL.revokeObjectURL(url);
-        const MAX_DIM = 1200;
+        const MAX_DIM = 800;
         let { width, height } = img;
         if (width > MAX_DIM || height > MAX_DIM) {
           if (width >= height) { height = Math.round((height / width) * MAX_DIM); width = MAX_DIM; }
@@ -101,20 +101,22 @@ export default function ProfilePage() {
         const canvas = document.createElement('canvas');
         canvas.width = width;
         canvas.height = height;
-        canvas.getContext('2d')!.drawImage(img, 0, 0, width, height);
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { resolve(file); return; }
+        ctx.drawImage(img, 0, 0, width, height);
         const tryQuality = (q: number) => {
           canvas.toBlob(blob => {
-            if (!blob) { reject(new Error('Compression failed')); return; }
-            if (blob.size <= maxBytes || q <= 0.4) {
+            if (!blob) { resolve(file); return; }
+            if (blob.size <= maxBytes || q <= 0.2) {
               resolve(new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' }));
             } else {
               tryQuality(q - 0.15);
             }
           }, 'image/jpeg', q);
         };
-        tryQuality(0.85);
+        tryQuality(0.75);
       };
-      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Could not load image')); };
+      img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
       img.src = url;
     });
   }
@@ -129,15 +131,9 @@ export default function ProfilePage() {
       return;
     }
 
-    let fileToUpload = file;
-    if (file.size > 2 * 1024 * 1024) {
-      try {
-        fileToUpload = await compressImage(file);
-      } catch {
-        setUploadError('Could not compress image. Please try a smaller file.');
-        return;
-      }
-    }
+    const fileToUpload = file.size > 2 * 1024 * 1024
+      ? await compressImage(file)
+      : file;
 
     setUploadError('');
     setUploading(true);
