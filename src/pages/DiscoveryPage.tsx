@@ -280,10 +280,7 @@ export default function DiscoveryPage() {
                           item={item}
                           mediaType={mt}
                           initialPreference={followedPrefMap.get(`${item.id}-${mt}`) ?? null}
-                          onDislike={(id) => {
-                            setRawFollowedItems(prev => prev.filter(x => x.tmdb_id !== id));
-                            setFollowedItems(prev => prev.filter(x => x.id !== id));
-                          }}
+                          onDislike={(id) => hideFollowedItem(id)}
                           onHide={hideFollowedItem}
                         />
                       </div>

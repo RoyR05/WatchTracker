@@ -1056,6 +1056,8 @@ export default function DetailPage() {
                   tvId={details.id}
                   numberOfSeasons={details.number_of_seasons}
                   seasons={details.seasons}
+                  showStatus={'status' in details ? (details as any).status : undefined}
+                  onAutoComplete={watchlistItem?.status === 'watching' ? () => updateWatchlistStatus('completed') : undefined}
                 />
               </div>
             )}

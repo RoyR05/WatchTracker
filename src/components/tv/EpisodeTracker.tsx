@@ -13,9 +13,16 @@ interface EpisodeTrackerProps {
   tvId: number;
   numberOfSeasons: number;
   seasons?: Array<{ season_number: number; episode_count: number }>;
+  showStatus?: string;       // TMDB status: "Ended", "Canceled", "Returning Series", etc.
+  onAutoComplete?: () => void; // Called when the last episode of a finished show is marked watched
 }
 
-export function EpisodeTracker({ tvId, numberOfSeasons, seasons }: EpisodeTrackerProps) {
+function isShowEnded(status?: string): boolean {
+  if (!status) return false;
+  return ['Ended', 'Canceled', 'Cancelled'].includes(status);
+}
+
+export function EpisodeTracker({ tvId, numberOfSeasons, seasons, showStatus, onAutoComplete }: EpisodeTrackerProps) {
   const { user } = useAuth();
   const toast = useToast();
   const [selectedSeason, setSelectedSeason] = useState(1);
@@ -152,6 +159,25 @@ export function EpisodeTracker({ tvId, numberOfSeasons, seasons }: EpisodeTracke
       }
 
       await Promise.all([loadSeasonData(), loadBingeSession()]);
+
+      // Auto-complete: if this was the last episode of the last season of a finished show
+      if (watched && isShowEnded(showStatus) && selectedSeason === numberOfSeasons && onAutoComplete && seasonDetails) {
+        const maxEp = Math.max(...seasonDetails.episodes.map(e => e.episode_number));
+        if (episodeNumber === maxEp) {
+          const { data: prog } = await supabase
+            .from('tv_show_progress')
+            .select('episode_number, watched')
+            .eq('user_id', user.id)
+            .eq('tmdb_id', tvId)
+            .eq('season_number', selectedSeason);
+          const watchedSet = new Set((prog ?? []).filter(p => p.watched).map(p => p.episode_number));
+          const allDone = seasonDetails.episodes.every(e => watchedSet.has(e.episode_number));
+          if (allDone) {
+            onAutoComplete();
+            toast.success('All episodes watched — marked as Completed!');
+          }
+        }
+      }
     } catch (error) {
       console.error('Error toggling episode:', error);
       toast.error('Failed to update episode status');
@@ -308,6 +334,12 @@ export function EpisodeTracker({ tvId, numberOfSeasons, seasons }: EpisodeTracke
         `Season ${selectedSeason} marked watched (${unwatchedEpisodes.length} episode${unwatchedEpisodes.length === 1 ? '' : 's'})`
       );
       await loadSeasonData();
+
+      // Auto-complete: marking the entire last season of a finished show = show complete
+      if (isShowEnded(showStatus) && selectedSeason === numberOfSeasons && onAutoComplete) {
+        onAutoComplete();
+        toast.success('All episodes watched — marked as Completed!');
+      }
     } catch (err) {
       console.error('Error marking season as watched:', err);
       toast.error('Failed to mark season as watched');
