@@ -148,7 +148,7 @@ export const followedPeopleService = {
           if (!date) {
             // Include announced-but-undated titles if they have meaningful popularity
             const key = `${e.id}-${mediaType}`;
-            if (!byKey.has(key) && !noDate.has(key) && (e.popularity ?? 0) >= 2) {
+            if (!byKey.has(key) && !noDate.has(key)) {
               noDate.set(key, {
                 tmdb_id: e.id,
                 media_type: mediaType,
