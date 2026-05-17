@@ -47,7 +47,7 @@ export default function CalendarPage() {
   const [upcomingMovies, setUpcomingMovies] = useState<UpcomingMovie[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>('calendar');
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
   useEffect(() => {
@@ -78,11 +78,13 @@ export default function CalendarPage() {
           const today = new Date();
           const episodes: UpcomingEpisode[] = [];
 
-          for (const season of details.seasons) {
-            if (season.season_number === 0) continue;
-
+          // Only the season containing the next-to-air episode can hold
+          // upcoming episodes. Shows with no upcoming episode (e.g. ended
+          // or long-running completed series) make ZERO season calls.
+          const upcomingSeasonNumber = details.next_episode_to_air?.season_number;
+          if (upcomingSeasonNumber != null) {
             try {
-              const seasonDetails = await tmdbService.getSeasonDetails(show.tmdb_id, season.season_number);
+              const seasonDetails = await tmdbService.getSeasonDetails(show.tmdb_id, upcomingSeasonNumber);
 
               for (const episode of seasonDetails.episodes) {
                 if (episode.air_date) {
@@ -103,7 +105,7 @@ export default function CalendarPage() {
                 }
               }
             } catch (err) {
-              console.error(`Error fetching season ${season.season_number} for show ${show.tmdb_id}:`, err);
+              console.error(`Error fetching season ${upcomingSeasonNumber} for show ${show.tmdb_id}:`, err);
             }
           }
 

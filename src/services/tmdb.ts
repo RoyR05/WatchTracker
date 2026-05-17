@@ -34,6 +34,14 @@ export interface TVShowDetails extends TVShow {
   number_of_seasons: number;
   number_of_episodes: number;
   created_by?: Array<{ id: number; name: string; profile_path: string | null }>;
+  next_episode_to_air?: {
+    id: number;
+    name: string;
+    air_date: string;
+    episode_number: number;
+    season_number: number;
+    still_path: string | null;
+  } | null;
   genres: Array<{ id: number; name: string }>;
   seasons: Array<{
     id: number;
