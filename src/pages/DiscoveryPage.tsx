@@ -238,7 +238,7 @@ export default function DiscoveryPage() {
                 <span className="text-sm text-gray-400">New &amp; upcoming</span>
               </div>
 
-              {followedPeople.length >= 2 && (
+              {followedPeople.length >= 1 && (
                 <div className="flex gap-2 overflow-x-auto pb-3 scrollbar-hide">
                   <button
                     onClick={() => setFollowedPersonFilter('all')}
