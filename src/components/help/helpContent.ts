@@ -15,8 +15,9 @@ export const HELP_TOPICS: HelpTopic[] = [
     blurb: 'Your home base — trending, anticipated, and popular titles, plus what you are currently watching.',
     bullets: [
       'Tap any poster to open its detail page.',
-      'Use the heart / thumbs to like or dislike — disliked titles stop showing up.',
+      'Use the heart / thumbs to like or dislike — disliked titles stop showing up in Trending, Anticipated, and Popular.',
       'Switch Movies / TV with the toggle at the top of each row.',
+      '"Currently Watching" at the top lets you jump straight back to what you are in the middle of.',
     ],
   },
   {
@@ -24,10 +25,12 @@ export const HELP_TOPICS: HelpTopic[] = [
     title: 'Discovery',
     blurb: 'Find something new to watch in a few different ways.',
     bullets: [
-      'Feeling Lucky picks something for you based on your taste.',
-      'Mood and Genre browsers narrow things down fast.',
-      '"From People You Follow" surfaces new & upcoming work from creators you follow.',
+      'Feeling Lucky picks something based on your Plan to Watch list, liked genres, or a wildcard — tap Next to cycle.',
+      'Stack up to 2 moods in Mood Discovery to blend their genres.',
+      '"From People You Follow" surfaces new & upcoming work — use the person pills to filter by a specific creator.',
+      'Tap the eye-slash icon on any followed-feed card to hide it permanently.',
       '"Browse by Streaming Service" shows what is on Netflix, Disney+, Paramount+, etc.',
+      'Genre browser lets you drill into a specific category.',
     ],
   },
   {
@@ -46,7 +49,7 @@ export const HELP_TOPICS: HelpTopic[] = [
     bullets: [
       'Statuses: Watching, Plan to Watch, Completed, Dropped.',
       'Filter by Movies/TV, sort, and search within your list.',
-      'Set a status from any title page or by swiping a card on mobile.',
+      'Set a status from any title page or by long-pressing a card.',
     ],
   },
   {
@@ -72,8 +75,8 @@ export const HELP_TOPICS: HelpTopic[] = [
     title: 'Following',
     blurb: 'People (actors, directors, creators) you follow.',
     bullets: [
-      'Follow someone from their person page or any cast/crew card.',
-      'Their new & upcoming titles appear in the Discovery feed.',
+      'Follow someone from their person page or any cast/crew card on a detail page.',
+      'Their new & upcoming titles appear in the "From People You Follow" Discovery feed.',
       'Tap Unfollow here to stop tracking someone.',
     ],
   },
@@ -112,7 +115,29 @@ export const HELP_TOPICS: HelpTopic[] = [
     bullets: [
       'Set a watchlist status, like/dislike, add to a list, or recommend it.',
       'Cast / Crew tabs — tap Follow on anyone to track their future work.',
-      'Check Plex, request it if missing, and write a private/shared note.',
+      'TV shows: tap an episode to mark it watched; enable Auto-fill gaps to backfill previous episodes automatically.',
+      '"Mark Season Watched" marks an entire season at once; finished shows auto-complete to Completed.',
+      'Check Plex, request it if missing, and write a private note visible only to you.',
+    ],
+  },
+  {
+    match: '/notifications',
+    title: 'Notifications',
+    blurb: 'Episode alerts, incoming recommendations, and Plex status updates all land here.',
+    bullets: [
+      'Tap the X on any notification to dismiss it.',
+      '"Clear All" removes every notification at once.',
+      'Unread count shows as a badge on the bell icon in the header.',
+    ],
+  },
+  {
+    match: '/person',
+    title: 'Person page',
+    blurb: 'Full filmography for an actor, director, or creator.',
+    bullets: [
+      'Tap Follow to track this person — their new & upcoming titles appear in your Discovery feed.',
+      'Switch between Movies and TV tabs to browse their credits.',
+      'Tap any title to open its detail page and add it to your watchlist.',
     ],
   },
 ];
