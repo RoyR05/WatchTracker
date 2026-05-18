@@ -8,7 +8,7 @@ A personal media tracker PWA called **RaineyFlixs**. Users track movies/TV shows
 - Supabase (Auth, DB, Edge Functions, Realtime, Storage)
 - TMDB API via Supabase Edge Function proxy (`supabase/functions/tmdb-proxy`)
 - Plex integration (`supabase/functions/plex-proxy`)
-- PWA via vite-plugin-pwa, deployed to Netlify at rflixs.rainey.app
+- PWA via vite-plugin-pwa, deployed to Vercel at rflixs.rainey.app
 - TanStack React Query + Framer Motion already installed
 
 ## Key architecture rules
