@@ -45,9 +45,17 @@ export default function ProfilePage() {
   const location = useLocation();
   const [highlightDiscovery, setHighlightDiscovery] = useState(false);
 
+  // Currently Watching hiatus settings
+  const [hiatusHideWeeks, setHiatusHideWeeks] = useState(3);
+  const [hiatusShowDays, setHiatusShowDays] = useState(14);
+
   useEffect(() => {
     userSettingsService.getEnglishOnlyFilter().then(setEnglishOnly);
     userSettingsService.getPreferredGenres().then(setPreferredGenres);
+    userSettingsService.getHiatusSettings().then(({ hideWeeks, showDays }) => {
+      setHiatusHideWeeks(hideWeeks);
+      setHiatusShowDays(showDays);
+    });
   }, []);
 
   // Deep-link from the onboarding tour: /profile#discovery-preferences
@@ -384,6 +392,54 @@ export default function ProfilePage() {
                   {preferredGenres.length} genre{preferredGenres.length !== 1 ? 's' : ''} selected — saved automatically
                 </p>
               )}
+            </div>
+          </div>
+
+          {/* Currently Watching preferences */}
+          <div className="bg-gray-800 rounded-lg p-6">
+            <h2 className="text-lg font-semibold text-white mb-1">Currently Watching</h2>
+            <p className="text-sm text-gray-400 mb-4">
+              Shows on a long hiatus are automatically hidden from your Dashboard and re-appear as their return date approaches. You can adjust the thresholds below.
+            </p>
+
+            <div className="flex items-center justify-between py-3 border-b border-gray-700 gap-4">
+              <div>
+                <p className="text-white font-medium">Hide after</p>
+                <p className="text-sm text-gray-400 mt-0.5">Hide a show when no new episode has aired for this many weeks.</p>
+              </div>
+              <select
+                value={hiatusHideWeeks}
+                onChange={async e => {
+                  const val = Number(e.target.value);
+                  setHiatusHideWeeks(val);
+                  await userSettingsService.setHiatusSettings(val, hiatusShowDays);
+                }}
+                className="bg-gray-700 text-white text-sm rounded-lg px-3 py-2 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-primary-500 flex-shrink-0"
+              >
+                {[1, 2, 3, 4, 6, 8].map(w => (
+                  <option key={w} value={w}>{w} {w === 1 ? 'week' : 'weeks'}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex items-center justify-between py-3 gap-4">
+              <div>
+                <p className="text-white font-medium">Show back when</p>
+                <p className="text-sm text-gray-400 mt-0.5">Re-surface a show this many days before its next episode airs.</p>
+              </div>
+              <select
+                value={hiatusShowDays}
+                onChange={async e => {
+                  const val = Number(e.target.value);
+                  setHiatusShowDays(val);
+                  await userSettingsService.setHiatusSettings(hiatusHideWeeks, val);
+                }}
+                className="bg-gray-700 text-white text-sm rounded-lg px-3 py-2 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-primary-500 flex-shrink-0"
+              >
+                {[7, 14, 21, 30].map(d => (
+                  <option key={d} value={d}>{d} days</option>
+                ))}
+              </select>
             </div>
           </div>
 

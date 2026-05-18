@@ -63,6 +63,9 @@ export interface Database {
           title: string | null
           poster_path: string | null
           media_year: number | null
+          next_air_date: string | null
+          last_air_date: string | null
+          show_status: string | null
           started_at: string | null
           completed_at: string | null
           created_at: string
@@ -80,6 +83,9 @@ export interface Database {
           title?: string | null
           poster_path?: string | null
           media_year?: number | null
+          next_air_date?: string | null
+          last_air_date?: string | null
+          show_status?: string | null
           started_at?: string | null
           completed_at?: string | null
           created_at?: string
@@ -97,6 +103,9 @@ export interface Database {
           title?: string | null
           poster_path?: string | null
           media_year?: number | null
+          next_air_date?: string | null
+          last_air_date?: string | null
+          show_status?: string | null
           started_at?: string | null
           completed_at?: string | null
           created_at?: string
@@ -311,6 +320,8 @@ export interface Database {
           id: string
           user_id: string
           english_only_filter: boolean
+          hiatus_hide_weeks: number
+          hiatus_show_days: number
           created_at: string
           updated_at: string
         }
@@ -318,6 +329,8 @@ export interface Database {
           id?: string
           user_id: string
           english_only_filter?: boolean
+          hiatus_hide_weeks?: number
+          hiatus_show_days?: number
           created_at?: string
           updated_at?: string
         }
@@ -325,6 +338,8 @@ export interface Database {
           id?: string
           user_id?: string
           english_only_filter?: boolean
+          hiatus_hide_weeks?: number
+          hiatus_show_days?: number
           created_at?: string
           updated_at?: string
         }

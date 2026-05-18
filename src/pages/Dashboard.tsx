@@ -14,7 +14,7 @@ import { userSettingsService } from '../services/userSettings';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { queryKeys } from '../lib/queryKeys';
-import type { Movie, TVShow } from '../services/tmdb';
+import type { Movie, TVShow, TVShowDetails } from '../services/tmdb';
 
 interface WatchlistItem {
   id: string;
@@ -24,22 +24,67 @@ interface WatchlistItem {
   title: string | null;
   poster_path: string | null;
   media_year: number | null;
+  next_air_date: string | null;
+  last_air_date: string | null;
+  show_status: string | null;
+}
+
+function isVisibleOnDashboard(item: WatchlistItem, hideWeeks: number, showDays: number): boolean {
+  if (item.media_type !== 'tv') return true;
+  if (['Ended', 'Canceled'].includes(item.show_status ?? '')) return true;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  if (item.next_air_date) {
+    const next = new Date(item.next_air_date);
+    const daysUntil = Math.ceil((next.getTime() - today.getTime()) / 86_400_000);
+    if (daysUntil <= showDays) return true;
+  }
+
+  if (item.last_air_date) {
+    const last = new Date(item.last_air_date);
+    const daysSince = Math.ceil((today.getTime() - last.getTime()) / 86_400_000);
+    if (daysSince <= hideWeeks * 7) return true;
+  }
+
+  // No schedule data yet — fail-open so items never silently vanish
+  if (!item.next_air_date && !item.last_air_date) return true;
+
+  return false;
 }
 
 /** Pure display card — poster override supplied by Dashboard's sequential backfill. */
-function WatchlistCard({ item, statusLabel, badgeClass, posterOverride }: {
+function WatchlistCard({ item, statusLabel, badgeClass, posterOverride, showDays }: {
   item: WatchlistItem;
   statusLabel: string;
   badgeClass: string;
   posterOverride?: string | null;
+  showDays: number;
 }) {
   const effectivePoster = posterOverride ?? item.poster_path;
+
+  const returnsLabel = (() => {
+    if (!item.next_air_date) return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const next = new Date(item.next_air_date);
+    const daysUntil = Math.ceil((next.getTime() - today.getTime()) / 86_400_000);
+    if (daysUntil > showDays) return null;
+    if (daysUntil <= 0) return 'Airing now';
+    return `Returns ${next.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+  })();
 
   return (
     <Link to={`/details/${item.media_type}/${item.tmdb_id}`} className="relative block group">
       <div className={`absolute top-2 right-2 z-10 ${badgeClass} text-white text-xs px-2 py-1 rounded`}>
         {statusLabel}
       </div>
+      {returnsLabel && (
+        <div className="absolute top-8 right-2 z-10 bg-amber-500 text-white text-xs px-2 py-1 rounded mt-1">
+          {returnsLabel}
+        </div>
+      )}
       <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-gray-800">
         <img
           src={effectivePoster
@@ -68,6 +113,8 @@ export default function Dashboard() {
   const [timeWindow, setTimeWindow] = useState<'day' | 'week'>('week');
   const [mediaType, setMediaType] = useState<'all' | 'movie' | 'tv'>('all');
   const [englishOnly, setEnglishOnly] = useState(false);
+  const [hiatusHideWeeks, setHiatusHideWeeks] = useState(3);
+  const [hiatusShowDays, setHiatusShowDays] = useState(14);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [preferenceMap, setPreferenceMap] = useState<Map<string, 'like' | 'dislike'>>(new Map());
   const [localDislikes, setLocalDislikes] = useState<Set<number>>(new Set());
@@ -78,8 +125,13 @@ export default function Dashboard() {
   // Load settings once, then enable all queries
   useEffect(() => {
     if (!user) return;
-    userSettingsService.getEnglishOnlyFilter().then(val => {
-      setEnglishOnly(val);
+    Promise.all([
+      userSettingsService.getEnglishOnlyFilter(),
+      userSettingsService.getHiatusSettings(),
+    ]).then(([englishOnlyVal, hiatus]) => {
+      setEnglishOnly(englishOnlyVal);
+      setHiatusHideWeeks(hiatus.hideWeeks);
+      setHiatusShowDays(hiatus.showDays);
       setSettingsLoaded(true);
     });
   }, [user]);
@@ -138,7 +190,7 @@ export default function Dashboard() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('watchlist_items').select('*').eq('user_id', user!.id).eq('status', 'watching')
-        .order('updated_at', { ascending: false }).limit(10);
+        .order('updated_at', { ascending: false }).limit(50);
       if (error) throw error;
       return data ?? [];
     },
@@ -159,11 +211,14 @@ export default function Dashboard() {
     staleTime: 60 * 1000,
   });
 
-  // Sequential poster backfill — one TMDB request at a time so we never rate-limit
+  // Sequential backfill — one TMDB request at a time so we never rate-limit.
+  // Populates poster_path/title/media_year for all items, and additionally
+  // next_air_date/last_air_date/show_status for TV shows (needed for hiatus hiding).
   useEffect(() => {
     const allItems = [...watchingItems, ...planToWatchItems] as WatchlistItem[];
     const toFetch = allItems.filter(
-      item => !item.poster_path && !backfilledIds.current.has(item.id)
+      item => (!item.poster_path || (item.media_type === 'tv' && item.last_air_date === null))
+        && !backfilledIds.current.has(item.id)
     );
     if (toFetch.length === 0) return;
 
@@ -185,6 +240,11 @@ export default function Dashboard() {
           const date = 'release_date' in details ? details.release_date : (details as any).first_air_date;
           const mediaYear = date ? new Date(date).getFullYear() : null;
 
+          const tvDetails = item.media_type === 'tv' ? (details as TVShowDetails) : null;
+          const nextAirDate = tvDetails?.next_episode_to_air?.air_date ?? null;
+          const lastAirDate = tvDetails?.last_episode_to_air?.air_date ?? null;
+          const showStatus = tvDetails?.status ?? null;
+
           // Update display immediately — no need to wait for DB
           if (poster) {
             setPosterOverrides(prev => new Map(prev).set(item.id, poster));
@@ -195,6 +255,9 @@ export default function Dashboard() {
             poster_path: poster,
             title: fetchedTitle,
             media_year: mediaYear,
+            next_air_date: nextAirDate,
+            last_air_date: lastAirDate,
+            show_status: showStatus,
           }).eq('id', item.id);
 
         } catch (e) {
@@ -261,25 +324,47 @@ export default function Dashboard() {
       <div className="space-y-8">
 
         {/* Currently Watching */}
-        <CollapsibleSection id="currently-watching" title="Currently Watching" itemCount={watchingItems.length}>
-          {watchingItems.length > 0 ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-              {watchingItems.map(item => (
-                <WatchlistCard
-                  key={item.id}
-                  item={item}
-                  statusLabel="Watching"
-                  badgeClass="bg-primary-600"
-                  posterOverride={posterOverrides.get(item.id)}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="bg-gray-800 rounded-lg p-8 text-center">
-              <p className="text-gray-400">No items in your watchlist yet. Start adding some content!</p>
-            </div>
-          )}
-        </CollapsibleSection>
+        {(() => {
+          const visibleWatching = watchingItems.filter(
+            item => isVisibleOnDashboard(item as WatchlistItem, hiatusHideWeeks, hiatusShowDays)
+          );
+          const hiddenCount = watchingItems.length - visibleWatching.length;
+          return (
+            <CollapsibleSection id="currently-watching" title="Currently Watching" itemCount={watchingItems.length}>
+              {visibleWatching.length > 0 ? (
+                <>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                    {visibleWatching.map(item => (
+                      <WatchlistCard
+                        key={item.id}
+                        item={item as WatchlistItem}
+                        statusLabel="Watching"
+                        badgeClass="bg-primary-600"
+                        posterOverride={posterOverrides.get(item.id)}
+                        showDays={hiatusShowDays}
+                      />
+                    ))}
+                  </div>
+                  {hiddenCount > 0 && (
+                    <p className="text-xs text-gray-500 mt-3">
+                      {hiddenCount} show{hiddenCount !== 1 ? 's' : ''} on hiatus hidden —{' '}
+                      <Link to="/watchlist" className="text-gray-400 hover:text-white underline">view all in Watchlist</Link>
+                    </p>
+                  )}
+                </>
+              ) : watchingItems.length > 0 ? (
+                <div className="bg-gray-800 rounded-lg p-8 text-center">
+                  <p className="text-gray-400">All your current shows are on hiatus.</p>
+                  <Link to="/watchlist" className="text-sm text-primary-400 hover:text-primary-300 mt-2 inline-block">View full Watchlist</Link>
+                </div>
+              ) : (
+                <div className="bg-gray-800 rounded-lg p-8 text-center">
+                  <p className="text-gray-400">No items in your watchlist yet. Start adding some content!</p>
+                </div>
+              )}
+            </CollapsibleSection>
+          );
+        })()}
 
         {/* Plan to Watch */}
         <CollapsibleSection id="plan-to-watch" title="Plan to Watch" itemCount={planToWatchItems.length}>
@@ -288,10 +373,11 @@ export default function Dashboard() {
               {planToWatchItems.map(item => (
                 <WatchlistCard
                   key={item.id}
-                  item={item}
+                  item={item as WatchlistItem}
                   statusLabel="Plan to Watch"
                   badgeClass="bg-amber-600"
                   posterOverride={posterOverrides.get(item.id)}
+                  showDays={hiatusShowDays}
                 />
               ))}
             </div>

@@ -116,6 +116,18 @@ export const userSettingsService = {
     return settings?.english_only_filter ?? false;
   },
 
+  async getHiatusSettings(): Promise<{ hideWeeks: number; showDays: number }> {
+    const settings = await this.getSettings();
+    return {
+      hideWeeks: settings?.hiatus_hide_weeks ?? 3,
+      showDays:  settings?.hiatus_show_days  ?? 14,
+    };
+  },
+
+  async setHiatusSettings(hideWeeks: number, showDays: number): Promise<{ success: boolean; error?: string }> {
+    return this.updateSettings({ hiatus_hide_weeks: hideWeeks, hiatus_show_days: showDays });
+  },
+
   async getPreferredGenres(): Promise<number[]> {
     const settings = await this.getSettings();
     const raw = (settings as any)?.preferred_genres;
