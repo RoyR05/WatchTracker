@@ -25,10 +25,13 @@ Read this before planning new work — it has detailed specs for all upcoming ph
 ## ⚠️ IMPORTANT: Phase numbering is NOT sequential
 Phases were NOT completed in numerical order. Some lower-numbered phases (24, 25, 26) were deliberately skipped in favour of higher-priority work and are still pending. Always check both lists below before starting anything.
 
-## Most recently completed: Phase 35 (2026-05-18)
-Phase 35 added an icon glossary to the Help panel:
-- New file: `src/components/help/iconGlossary.ts` (17 icon entries, 4 groups)
-- Updated: `src/components/help/HelpPanel.tsx` (collapsible Icon reference section)
+## Most recently completed: Phase 37 (2026-05-18)
+Phase 37 added smart hiatus hiding for the Currently Watching section:
+- DB migration: `next_air_date`, `last_air_date`, `show_status` on `watchlist_items`; `hiatus_hide_weeks` (default 3) + `hiatus_show_days` (default 14) on `user_settings`
+- Dashboard backfill now also caches air date schedule + show status for TV shows
+- `isVisibleOnDashboard()` filter hides on-hiatus shows; shows amber "Returns [date]" badge when returning soon; shows "X shows on hiatus hidden" note with Watchlist link
+- Profile Settings → "Currently Watching" section: user-configurable hide/show thresholds
+- Ended/Canceled shows always visible; items with no schedule data fail-open
 
 ## All completed phases — DO NOT redo any of these
 - Phase 1: Security (API key → env var, CORS hardening, endpoint allowlist)
@@ -63,7 +66,8 @@ Phase 35 added an icon glossary to the Help panel:
 - Phase 32: Auto-complete TV show on last episode watched
 - Phase 33: Followed feed hidden items no longer reappear after refresh
 - Phase 34: Help content updated for all features through Phase 33
-- Phase 35: Icon glossary added to Help panel ← LAST COMPLETED
+- Phase 35: Icon glossary added to Help panel
+- Phase 37: Smart hiatus hiding for Currently Watching (Dashboard + Profile settings) ← LAST COMPLETED
 
 ## Remaining phases — not yet started
 - Phase 2.3: Dashboard double-fetch race condition (partially addressed)
