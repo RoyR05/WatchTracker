@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { HELP_TOPICS, topicForPath, HelpTopic } from './helpContent';
+import { groupedGlossary } from './iconGlossary';
 
 interface HelpPanelProps {
   open: boolean;
@@ -14,12 +15,14 @@ export function HelpPanel({ open, onClose, onReplayTour, installAvailable, onIns
   const location = useLocation();
   const [selected, setSelected] = useState<HelpTopic | null>(null);
   const [showAll, setShowAll] = useState(false);
+  const [showIcons, setShowIcons] = useState(false);
 
   // Reset to the current page's topic each time the panel opens.
   useEffect(() => {
     if (open) {
       setSelected(topicForPath(location.pathname));
       setShowAll(false);
+      setShowIcons(false);
     }
   }, [open, location.pathname]);
 
@@ -61,6 +64,7 @@ export function HelpPanel({ open, onClose, onReplayTour, installAvailable, onIns
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
+          {/* Current page topic */}
           <div>
             <p className="text-xs uppercase tracking-wide text-primary-400 font-semibold mb-1">
               This page
@@ -77,6 +81,7 @@ export function HelpPanel({ open, onClose, onReplayTour, installAvailable, onIns
             </ul>
           </div>
 
+          {/* Browse all topics */}
           <div className="border-t border-white/10 pt-4">
             <button
               onClick={() => setShowAll((s) => !s)}
@@ -98,6 +103,55 @@ export function HelpPanel({ open, onClose, onReplayTour, installAvailable, onIns
                   >
                     {t.title}
                   </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Icon reference */}
+          <div className="border-t border-white/10 pt-4">
+            <button
+              onClick={() => setShowIcons((s) => !s)}
+              className="text-sm font-medium text-gray-300 hover:text-white transition-colors"
+            >
+              {showIcons ? '▼ Hide icon reference' : '▶ Icon reference'}
+            </button>
+            {showIcons && (
+              <div className="mt-3 space-y-5">
+                {groupedGlossary().map(({ group, entries }) => (
+                  <div key={group}>
+                    <p className="text-xs uppercase tracking-wide text-primary-400 font-semibold mb-2">
+                      {group}
+                    </p>
+                    <ul className="space-y-3">
+                      {entries.map((entry) => (
+                        <li key={entry.name} className="flex items-start gap-3">
+                          <span className="flex-shrink-0 w-8 h-8 rounded-lg bg-gray-800 flex items-center justify-center">
+                            <svg
+                              className="w-5 h-5 text-gray-300"
+                              fill={entry.fill ?? 'none'}
+                              stroke={entry.fill === 'currentColor' ? 'none' : 'currentColor'}
+                              viewBox="0 0 24 24"
+                            >
+                              {entry.paths.map((d, i) => (
+                                <path
+                                  key={i}
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={entry.fill === 'currentColor' ? undefined : 2}
+                                  d={d}
+                                />
+                              ))}
+                            </svg>
+                          </span>
+                          <div>
+                            <p className="text-sm font-semibold text-white">{entry.name}</p>
+                            <p className="text-xs text-gray-400 leading-relaxed">{entry.description}</p>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 ))}
               </div>
             )}
