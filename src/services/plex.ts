@@ -263,7 +263,7 @@ export const plexService = {
   async getActiveClients(): Promise<PlexClient[]> {
     const headers = await getAuthHeaders();
     const res = await fetch(`${PLEX_PROXY_URL}?action=clients`, { headers });
-    if (!res.ok) throw new Error(`Plex client fetch failed (${res.status})`);
+    if (!res.ok) return [];
     const data = await res.json();
     return (data.clients ?? []) as PlexClient[];
   },

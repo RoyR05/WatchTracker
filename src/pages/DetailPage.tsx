@@ -136,7 +136,7 @@ export default function DetailPage() {
   const [plexRequest, setPlexRequest] = useState<PlexRequest | null>(null);
   const [plexSubmitting, setPlexSubmitting] = useState(false);
   const [plexDevices, setPlexDevices] = useState<PlexDevicePermission[]>([]);
-  const [plexDevicesAll, setPlexDevicesAll] = useState<PlexDevicePermission[]>([]);
+  const [plexOnlineIds, setPlexOnlineIds] = useState<string[]>([]);
   const [playStatus, setPlayStatus] = useState<'idle' | 'loading' | 'sending' | 'sent' | 'error'>('idle');
   const [showDeviceDropdown, setShowDeviceDropdown] = useState(false);
 
@@ -453,17 +453,20 @@ export default function DetailPage() {
     setPlayStatus('loading');
     setShowDeviceDropdown(true);
     try {
-      const [myDevices, activeClients] = await Promise.all([
-        plexService.getMyDevices(user.id),
-        plexService.getActiveClients(),
-      ]);
-      const activeIds = new Set(activeClients.map(c => c.clientIdentifier));
-      setPlexDevicesAll(myDevices);
-      setPlexDevices(myDevices.filter(d => activeIds.has(d.client_identifier)));
+      // getMyDevices is required — throws on failure
+      const myDevices = await plexService.getMyDevices(user.id);
+      setPlexDevices(myDevices);
+      // getActiveClients is best-effort for online badges; failure just hides badges
+      try {
+        const activeClients = await plexService.getActiveClients();
+        setPlexOnlineIds(activeClients.map(c => c.clientIdentifier));
+      } catch {
+        setPlexOnlineIds([]);
+      }
     } catch (err: any) {
       toast.error(err?.message || 'Could not load your Plex devices.');
-      setPlexDevicesAll([]);
       setPlexDevices([]);
+      setPlexOnlineIds([]);
     } finally {
       setPlayStatus('idle');
     }
@@ -897,20 +900,26 @@ export default function DetailPage() {
                                 </div>
                               ) : plexDevices.length === 0 ? (
                                 <div className="px-4 py-3 text-sm text-gray-400">
-                                  {plexDevicesAll.length > 0
-                                    ? '📺 Your TV is offline — open Plex on it and try again.'
-                                    : 'No TVs assigned to your account.'}
+                                  No TVs assigned to your account.
                                 </div>
                               ) : (
-                                plexDevices.map(device => (
-                                  <button
-                                    key={device.id}
-                                    onClick={() => handlePlay(device.client_identifier)}
-                                    className="w-full text-left px-4 py-3 text-sm text-white hover:bg-gray-700 first:rounded-t-lg last:rounded-b-lg transition-colors"
-                                  >
-                                    📺 {device.friendly_name}
-                                  </button>
-                                ))
+                                plexDevices.map(device => {
+                                  const isOnline = plexOnlineIds.includes(device.client_identifier);
+                                  return (
+                                    <button
+                                      key={device.id}
+                                      onClick={() => handlePlay(device.client_identifier)}
+                                      className="w-full text-left px-4 py-3 text-sm text-white hover:bg-gray-700 first:rounded-t-lg last:rounded-b-lg transition-colors flex items-center justify-between gap-3"
+                                    >
+                                      <span>📺 {device.friendly_name}</span>
+                                      {plexOnlineIds.length > 0 && (
+                                        <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full ${isOnline ? 'bg-green-600/30 text-green-300' : 'bg-gray-600/50 text-gray-400'}`}>
+                                          {isOnline ? 'Online' : 'Offline'}
+                                        </span>
+                                      )}
+                                    </button>
+                                  );
+                                })
                               )}
                               <button
                                 onClick={() => { setShowDeviceDropdown(false); setPlayStatus('idle'); }}
