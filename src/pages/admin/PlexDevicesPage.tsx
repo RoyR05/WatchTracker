@@ -11,7 +11,7 @@ interface UserProfile {
 }
 
 interface AssignmentRow extends PlexDevicePermission {
-  user_profiles: { username: string };
+  profiles: { username: string };
 }
 
 export function PlexDevicesPage() {
@@ -178,7 +178,7 @@ export function PlexDevicesPage() {
                         <div className="flex flex-wrap gap-2">
                           {existing.map(a => (
                             <div key={a.id} className="flex items-center gap-2 px-3 py-1.5 bg-gray-700 rounded-full text-sm">
-                              <span className="text-white font-medium">{a.user_profiles.username}</span>
+                              <span className="text-white font-medium">{a.profiles.username}</span>
                               <span className="text-gray-400">"{a.friendly_name}"</span>
                               <button
                                 onClick={() => handleUnassign(a.id)}
@@ -264,7 +264,7 @@ export function PlexDevicesPage() {
                 <tbody className="divide-y divide-gray-700">
                   {assignments.map(a => (
                     <tr key={a.id} className="hover:bg-gray-750">
-                      <td className="px-4 py-3 text-white font-medium">{a.user_profiles.username}</td>
+                      <td className="px-4 py-3 text-white font-medium">{a.profiles.username}</td>
                       <td className="px-4 py-3 text-gray-300">📺 {a.friendly_name}</td>
                       <td className="px-4 py-3 text-gray-500 font-mono text-xs hidden md:table-cell">{a.client_identifier}</td>
                       <td className="px-4 py-3 text-gray-400 text-xs">{new Date(a.created_at).toLocaleDateString()}</td>

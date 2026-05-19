@@ -279,12 +279,13 @@ export const plexService = {
   },
 
   /** Admin: all device assignments across all users, joined with username. */
-  async getAllDevicePermissions(): Promise<(PlexDevicePermission & { user_profiles: { username: string } })[]> {
-    const { data } = await supabase
+  async getAllDevicePermissions(): Promise<(PlexDevicePermission & { profiles: { username: string } })[]> {
+    const { data, error } = await supabase
       .from('plex_device_permissions')
-      .select('*, user_profiles!inner(username)')
+      .select('*, profiles:user_id(username)')
       .order('friendly_name');
-    return (data ?? []) as (PlexDevicePermission & { user_profiles: { username: string } })[];
+    if (error) throw error;
+    return (data ?? []) as (PlexDevicePermission & { profiles: { username: string } })[];
   },
 
   async assignDevice(userId: string, clientIdentifier: string, friendlyName: string): Promise<void> {
