@@ -21,6 +21,7 @@ import { PersonPage } from './pages/PersonPage';
 import FollowingPage from './pages/FollowingPage';
 import { NotificationsPage } from './pages/NotificationsPage';
 import DiscoveryPage from './pages/DiscoveryPage';
+import BrowsePage from './pages/BrowsePage';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
 import { UsersPage } from './pages/admin/UsersPage';
 import { PermissionsPage } from './pages/admin/PermissionsPage';
@@ -45,6 +46,7 @@ function AnimatedRoutes() {
         <Route path="/pending-approval" element={<PageTransition><PendingApprovalPage /></PageTransition>} />
         <Route path="/" element={<ProtectedRoute><PageTransition><Dashboard /></PageTransition></ProtectedRoute>} />
         <Route path="/discovery" element={<ProtectedRoute><PageTransition><DiscoveryPage /></PageTransition></ProtectedRoute>} />
+        <Route path="/browse" element={<ProtectedRoute><PageTransition><BrowsePage /></PageTransition></ProtectedRoute>} />
         <Route path="/search" element={<ProtectedRoute><PageTransition><SearchPage /></PageTransition></ProtectedRoute>} />
         <Route path="/details/:mediaType/:id" element={<ProtectedRoute><PageTransition><DetailPage /></PageTransition></ProtectedRoute>} />
         <Route path="/person/:id" element={<ProtectedRoute><PageTransition><PersonPage /></PageTransition></ProtectedRoute>} />

@@ -149,6 +149,134 @@ export interface PersonCredits {
   crew: CrewMember[];
 }
 
+export interface Genre {
+  id: number;
+  name: string;
+}
+
+export interface WatchProvider {
+  provider_id: number;
+  provider_name: string;
+  logo_path: string | null;
+  display_priority: number;
+}
+
+export type BrowseTab = 'popular' | 'now_playing' | 'upcoming' | 'top_rated';
+export type BrowseMediaType = 'movie' | 'tv' | 'both';
+export type BrowseItem = (Movie | TVShow) & { media_type: 'movie' | 'tv' };
+
+export interface BrowseDiscoverOptions {
+  tab: BrowseTab;
+  mediaType: BrowseMediaType;
+  genres: number[];
+  providers: Array<number | string>;
+  dateFrom?: string; // 'YYYY-MM-DD'
+  dateTo?: string; // 'YYYY-MM-DD'
+  minRating?: number; // 0..10
+  sortBy?: string; // '' = tab default
+  page: number;
+  englishOnly?: boolean;
+}
+
+export interface BrowseDiscoverResult {
+  // Single-type mode: the requested page, already tagged with media_type.
+  results: BrowseItem[];
+  total_pages: number;
+  // "Both" mode: raw per-stream pages so the caller can merge across pages.
+  movie?: BrowseItem[];
+  tv?: BrowseItem[];
+  moviePages?: number;
+  tvPages?: number;
+}
+
+function fmtDate(d: Date): string {
+  return d.toISOString().split('T')[0];
+}
+
+// Builds a TMDB /discover query for one media type from browse options.
+// Tab presets are applied first, then user filters layer on top.
+function buildBrowseParams(
+  mt: 'movie' | 'tv',
+  o: BrowseDiscoverOptions
+): Record<string, string> {
+  const isMovie = mt === 'movie';
+  const dateGte = isMovie ? 'primary_release_date.gte' : 'first_air_date.gte';
+  const dateLte = isMovie ? 'primary_release_date.lte' : 'first_air_date.lte';
+
+  const p: Record<string, string> = {
+    // TMDB caps discover pagination at 500.
+    page: String(Math.min(Math.max(o.page, 1), 500)),
+    include_adult: 'false',
+  };
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  switch (o.tab) {
+    case 'popular':
+      p['sort_by'] = 'popularity.desc';
+      break;
+    case 'top_rated':
+      p['sort_by'] = 'vote_average.desc';
+      p['vote_count.gte'] = '200';
+      break;
+    case 'now_playing': {
+      const from = new Date(today);
+      from.setDate(from.getDate() - 42);
+      if (isMovie) {
+        p['primary_release_date.gte'] = fmtDate(from);
+        p['primary_release_date.lte'] = fmtDate(today);
+      } else {
+        p['air_date.gte'] = fmtDate(from);
+        p['air_date.lte'] = fmtDate(today);
+      }
+      p['sort_by'] = 'popularity.desc';
+      break;
+    }
+    case 'upcoming': {
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      p[dateGte] = fmtDate(tomorrow);
+      p['sort_by'] = isMovie ? 'primary_release_date.asc' : 'first_air_date.asc';
+      break;
+    }
+  }
+
+  if (o.genres.length) p['with_genres'] = o.genres.join(',');
+
+  if (o.providers.length) {
+    p['with_watch_providers'] = o.providers.join('|');
+    p['watch_region'] = 'US';
+  }
+
+  if (o.minRating && o.minRating > 0) {
+    p['vote_average.gte'] = String(o.minRating);
+    if (o.tab !== 'top_rated' && !p['vote_count.gte']) p['vote_count.gte'] = '50';
+  }
+
+  // User date range supersedes any tab preset window.
+  if (o.dateFrom || o.dateTo) {
+    delete p['air_date.gte'];
+    delete p['air_date.lte'];
+    delete p[dateGte];
+    delete p[dateLte];
+    if (o.dateFrom) p[dateGte] = o.dateFrom;
+    if (o.dateTo) p[dateLte] = o.dateTo;
+  }
+
+  if (o.sortBy) {
+    if (o.sortBy === 'newest') {
+      // Semantic value: translate to the correct TMDB date field per media type.
+      p['sort_by'] = isMovie ? 'primary_release_date.desc' : 'first_air_date.desc';
+    } else {
+      p['sort_by'] = o.sortBy;
+    }
+  }
+  if (o.englishOnly) p['with_original_language'] = 'en';
+
+  return p;
+}
+
 async function tmdbFetch(endpoint: string, params: Record<string, string> = {}, retries = 0): Promise<any> {
   const searchParams = new URLSearchParams({ endpoint, ...params });
   const response = await fetch(`${TMDB_PROXY_URL}?${searchParams.toString()}`);
@@ -389,6 +517,55 @@ export const tmdbService = {
         total_pages: Math.max(movies.total_pages || 1, tvShows.total_pages || 1)
       };
     }
+  },
+
+  // Live TMDB genre list for the given media type.
+  getGenres: async (mediaType: 'movie' | 'tv'): Promise<{ genres: Genre[] }> => {
+    return tmdbFetch(`/genre/${mediaType}/list`, {});
+  },
+
+  // Live TMDB watch-provider list (US region) for the given media type.
+  getWatchProviders: async (
+    mediaType: 'movie' | 'tv'
+  ): Promise<{ results: WatchProvider[] }> => {
+    return tmdbFetch(`/watch/providers/${mediaType}`, { watch_region: 'US' });
+  },
+
+  // Unified discover for the Browse page. Tabs are implemented as discover
+  // presets so genre/provider/date/rating filters compose cleanly. "Both"
+  // returns raw per-stream pages; the caller merges across accumulated pages.
+  browseDiscover: async (
+    o: BrowseDiscoverOptions
+  ): Promise<BrowseDiscoverResult> => {
+    if (o.mediaType === 'both') {
+      const [m, t] = await Promise.all([
+        tmdbFetch('/discover/movie', buildBrowseParams('movie', o)),
+        tmdbFetch('/discover/tv', buildBrowseParams('tv', o)),
+      ]);
+      const movie: BrowseItem[] = (m.results || []).map((r: Movie) => ({
+        ...r,
+        media_type: 'movie' as const,
+      }));
+      const tv: BrowseItem[] = (t.results || []).map((r: TVShow) => ({
+        ...r,
+        media_type: 'tv' as const,
+      }));
+      return {
+        results: [],
+        total_pages: Math.max(m.total_pages || 1, t.total_pages || 1),
+        movie,
+        tv,
+        moviePages: m.total_pages || 1,
+        tvPages: t.total_pages || 1,
+      };
+    }
+
+    const mt = o.mediaType;
+    const res = await tmdbFetch(`/discover/${mt}`, buildBrowseParams(mt, o));
+    const results: BrowseItem[] = (res.results || []).map(
+      (r: Movie | TVShow) => ({ ...r, media_type: mt })
+    );
+    return { results, total_pages: res.total_pages || 1 };
   },
 
   getPopular: async (mediaType: 'movie' | 'tv' | 'all' = 'all', page = 1, englishOnly = false) => {

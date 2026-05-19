@@ -28,6 +28,7 @@ const ALLOWED_ENDPOINT_PREFIXES = [
   '/discover/movie',
   '/discover/tv',
   '/genre/',
+  '/watch/providers/',
 ];
 
 Deno.serve(async (req: Request) => {
