@@ -476,17 +476,40 @@ Deno.serve(async (req: Request) => {
         return jsonResponse({ error: "Device not assigned to this user" }, 403);
       }
 
-      // 3. Fire the Plex playMedia command to the server, targeting the client
-      const playPath = `/player/playback/playMedia`
-        + `?key=/library/metadata/${encodeURIComponent(ratingKey)}`
+      // 3. Fire the Plex playMedia command to the server, targeting the client.
+      // Use a direct fetch (not plexFetch) so we can include the required
+      // X-Plex-Client-Identifier header. Without it the server accepts the
+      // request but cannot associate a controller context and silently discards
+      // the companion command. Also use the full server:// key URI so the Roku
+      // client knows which server owns the content.
+      const commandID = Date.now(); // unique per call — prevents server deduplication
+      const playUrl = `${serverUri}/player/playback/playMedia`
+        + `?key=server://${encodeURIComponent(serverMachineId)}/com.plexapp.plugins.library/library/metadata/${encodeURIComponent(ratingKey)}`
         + `&offset=0`
         + `&machineIdentifier=${encodeURIComponent(serverMachineId)}`
         + `&type=video`
         + `&X-Plex-Target-Client-Identifier=${encodeURIComponent(clientIdentifier)}`
-        + `&commandID=1`;
+        + `&commandID=${commandID}`
+        + `&X-Plex-Token=${plexToken}`;
 
-      const playRes = await plexFetch(serverUri, playPath, plexToken, 10000);
-      return jsonResponse({ success: playRes !== null });
+      let playOk = false;
+      let playError: string | undefined;
+      try {
+        const playRes = await fetch(playUrl, {
+          headers: {
+            "Accept": "application/json",
+            "X-Plex-Client-Identifier": PLEX_CLIENT_ID,
+            "X-Plex-Product": "WatchTracker",
+            "X-Plex-Device": "WatchTracker Server",
+          },
+          signal: AbortSignal.timeout(10000),
+        });
+        playOk = playRes.ok;
+        if (!playOk) playError = `Plex returned ${playRes.status}`;
+      } catch (e: unknown) {
+        playError = (e instanceof Error ? e.message : String(e)) ?? "Play command timed out";
+      }
+      return jsonResponse({ success: playOk, error: playError });
     }
 
     return jsonResponse({ error: `Unknown action: ${action}` }, 400);
