@@ -278,15 +278,16 @@ export const plexService = {
     return (data ?? []) as PlexDevicePermission[];
   },
 
-  /** Admin: all device assignments across all users, joined with username. */
-  async getAllDevicePermissions(): Promise<(PlexDevicePermission & { profiles: { username: string } })[]> {
+  /** Admin: all device assignments across all users. Username resolved client-side from users list. */
+  async getAllDevicePermissions(): Promise<PlexDevicePermission[]> {
     const { data, error } = await supabase
       .from('plex_device_permissions')
-      .select('*, profiles:user_id(username)')
+      .select('*')
       .order('friendly_name');
     if (error) throw error;
-    return (data ?? []) as (PlexDevicePermission & { profiles: { username: string } })[];
+    return (data ?? []) as PlexDevicePermission[];
   },
+
 
   async assignDevice(userId: string, clientIdentifier: string, friendlyName: string): Promise<void> {
     const { error } = await supabase
