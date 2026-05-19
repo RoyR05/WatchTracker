@@ -136,6 +136,7 @@ export default function DetailPage() {
   const [plexRequest, setPlexRequest] = useState<PlexRequest | null>(null);
   const [plexSubmitting, setPlexSubmitting] = useState(false);
   const [plexDevices, setPlexDevices] = useState<PlexDevicePermission[]>([]);
+  const [plexDevicesAll, setPlexDevicesAll] = useState<PlexDevicePermission[]>([]);
   const [playStatus, setPlayStatus] = useState<'idle' | 'loading' | 'sending' | 'sent' | 'error'>('idle');
   const [showDeviceDropdown, setShowDeviceDropdown] = useState(false);
 
@@ -457,9 +458,11 @@ export default function DetailPage() {
         plexService.getActiveClients(),
       ]);
       const activeIds = new Set(activeClients.map(c => c.clientIdentifier));
+      setPlexDevicesAll(myDevices);
       setPlexDevices(myDevices.filter(d => activeIds.has(d.client_identifier)));
-    } catch {
-      // Non-fatal — empty device list will show "no active TVs" message
+    } catch (err: any) {
+      toast.error(err?.message || 'Could not load your Plex devices.');
+      setPlexDevicesAll([]);
       setPlexDevices([]);
     } finally {
       setPlayStatus('idle');
@@ -894,7 +897,9 @@ export default function DetailPage() {
                                 </div>
                               ) : plexDevices.length === 0 ? (
                                 <div className="px-4 py-3 text-sm text-gray-400">
-                                  No active TVs assigned to you.
+                                  {plexDevicesAll.length > 0
+                                    ? '📺 Your TV is offline — open Plex on it and try again.'
+                                    : 'No TVs assigned to your account.'}
                                 </div>
                               ) : (
                                 plexDevices.map(device => (

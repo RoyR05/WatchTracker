@@ -263,18 +263,19 @@ export const plexService = {
   async getActiveClients(): Promise<PlexClient[]> {
     const headers = await getAuthHeaders();
     const res = await fetch(`${PLEX_PROXY_URL}?action=clients`, { headers });
-    if (!res.ok) return [];
+    if (!res.ok) throw new Error(`Plex client fetch failed (${res.status})`);
     const data = await res.json();
     return (data.clients ?? []) as PlexClient[];
   },
 
   /** This user's assigned devices (Supabase RLS ensures only their own rows). */
   async getMyDevices(userId: string): Promise<PlexDevicePermission[]> {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('plex_device_permissions')
       .select('*')
       .eq('user_id', userId)
       .order('friendly_name');
+    if (error) throw error;
     return (data ?? []) as PlexDevicePermission[];
   },
 
