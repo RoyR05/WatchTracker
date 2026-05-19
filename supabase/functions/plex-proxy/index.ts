@@ -66,6 +66,7 @@ interface ServerInfo {
   uri: string;
   name: string;
   accessToken: string;
+  machineIdentifier: string;
 }
 
 interface PlexConnection {
@@ -79,6 +80,8 @@ interface PlexResource {
   name: string;
   provides: string;
   accessToken: string;
+  clientIdentifier: string;
+  presence: boolean;
   connections: PlexConnection[];
 }
 
@@ -114,7 +117,7 @@ async function discoverServers(plexToken: string): Promise<ServerInfo[]> {
   const results: ServerInfo[] = [];
   for (const server of servers) {
     const uri = pickBestConnection(server.connections || []);
-    if (uri) results.push({ uri, name: server.name, accessToken: server.accessToken || plexToken });
+    if (uri) results.push({ uri, name: server.name, accessToken: server.accessToken || plexToken, machineIdentifier: server.clientIdentifier || "" });
   }
 
   if (results.length === 0) {
@@ -170,9 +173,9 @@ function findBestMatch(
   searchTitle: string,
   year: string | null,
   mediaType: string | null,
-  serverName: string
-): { title: string; year: number | null; quality: string | null; server: string; score: number } | null {
-  let best: { title: string; year: number | null; quality: string | null; server: string; score: number } | null = null;
+  server: ServerInfo
+): { title: string; year: number | null; quality: string | null; server: string; score: number; ratingKey: string; serverUri: string; serverMachineId: string } | null {
+  let best: { title: string; year: number | null; quality: string | null; server: string; score: number; ratingKey: string; serverUri: string; serverMachineId: string } | null = null;
 
   for (const item of items) {
     const itemTitle = (item.title as string) || "";
@@ -199,7 +202,8 @@ function findBestMatch(
           quality = media[0].videoResolution;
         }
       }
-      best = { title: itemTitle, year: item.year as number | null, quality, server: serverName, score };
+      const ratingKey = String(item.ratingKey || "");
+      best = { title: itemTitle, year: item.year as number | null, quality, server: server.name, score, ratingKey, serverUri: server.uri, serverMachineId: server.machineIdentifier };
     }
   }
   return best;
@@ -317,12 +321,12 @@ Deno.serve(async (req: Request) => {
               allItems.push(...hub.Metadata);
             }
           }
-          return findBestMatch(allItems, title, year, mediaType, server.name);
+          return findBestMatch(allItems, title, year, mediaType, server);
         })
       );
 
       // Find best across all servers
-      let overallBest: { title: string; year: number | null; quality: string | null; server: string; score: number } | null = null;
+      let overallBest: { title: string; year: number | null; quality: string | null; server: string; score: number; ratingKey: string; serverUri: string; serverMachineId: string } | null = null;
       for (const r of results) {
         if (r.status === "fulfilled" && r.value) {
           if (!overallBest || r.value.score > overallBest.score) {
@@ -334,7 +338,7 @@ Deno.serve(async (req: Request) => {
       if (overallBest) {
         return jsonResponse({
           available: true,
-          match: { title: overallBest.title, year: overallBest.year, quality: overallBest.quality, server: overallBest.server },
+          match: { title: overallBest.title, year: overallBest.year, quality: overallBest.quality, server: overallBest.server, ratingKey: overallBest.ratingKey, serverUri: overallBest.serverUri, serverMachineId: overallBest.serverMachineId },
           serversSearched: servers.length,
         });
       }
@@ -353,7 +357,7 @@ Deno.serve(async (req: Request) => {
               const data = await plexFetch(server.uri, path, server.accessToken) as { MediaContainer?: { Metadata?: Array<Record<string, unknown>> } } | null;
               if (!data) return null;
               const items = data?.MediaContainer?.Metadata || [];
-              return findBestMatch(items, title, year, mediaType, server.name);
+              return findBestMatch(items, title, year, mediaType, server);
             })
           );
 
@@ -368,7 +372,7 @@ Deno.serve(async (req: Request) => {
           if (overallBest) {
             return jsonResponse({
               available: true,
-              match: { title: overallBest.title, year: overallBest.year, quality: overallBest.quality, server: overallBest.server },
+              match: { title: overallBest.title, year: overallBest.year, quality: overallBest.quality, server: overallBest.server, ratingKey: overallBest.ratingKey, serverUri: overallBest.serverUri, serverMachineId: overallBest.serverMachineId },
               serversSearched: servers.length,
             });
           }
@@ -411,6 +415,78 @@ Deno.serve(async (req: Request) => {
         .eq("id", 1);
 
       return jsonResponse({ movieSections, tvSections });
+    }
+
+    // --- CLIENTS — list all currently-online Plex player devices ---
+    if (action === "clients") {
+      const res = await fetch(
+        "https://plex.tv/api/v2/resources?includeHttps=1&includeRelay=1",
+        {
+          headers: {
+            Accept: "application/json",
+            "X-Plex-Token": plexToken,
+            "X-Plex-Client-Identifier": PLEX_CLIENT_ID,
+          },
+          signal: AbortSignal.timeout(8000),
+        }
+      );
+      if (!res.ok) {
+        return jsonResponse({ error: `Plex.tv returned ${res.status}` }, 502);
+      }
+      const resources: PlexResource[] = await res.json();
+      const clients = resources
+        .filter((r) => r.provides.includes("player") && r.presence)
+        .map((r) => ({
+          clientIdentifier: r.clientIdentifier,
+          name: r.name,
+          product: (r as Record<string, unknown>).product ?? "",
+          platform: (r as Record<string, unknown>).platform ?? "",
+        }));
+      return jsonResponse({ clients });
+    }
+
+    // --- PLAY — fire remote playback on an assigned device ---
+    if (action === "play") {
+      // 1. Authenticate the caller via JWT
+      const authHeader = req.headers.get("Authorization") ?? "";
+      const jwt = authHeader.replace(/^Bearer\s+/i, "");
+      const { data: { user }, error: authErr } = await supabase.auth.getUser(jwt);
+      if (authErr || !user) {
+        return jsonResponse({ error: "Unauthorized" }, 401);
+      }
+
+      const clientIdentifier = url.searchParams.get("clientIdentifier");
+      const ratingKey = url.searchParams.get("ratingKey");
+      const serverUri = url.searchParams.get("serverUri");
+      const serverMachineId = url.searchParams.get("serverMachineId");
+
+      if (!clientIdentifier || !ratingKey || !serverUri || !serverMachineId) {
+        return jsonResponse({ error: "Missing required parameters" }, 400);
+      }
+
+      // 2. Authorization: user must have this device explicitly assigned to them
+      const { data: perm } = await supabase
+        .from("plex_device_permissions")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("client_identifier", clientIdentifier)
+        .maybeSingle();
+
+      if (!perm) {
+        return jsonResponse({ error: "Device not assigned to this user" }, 403);
+      }
+
+      // 3. Fire the Plex playMedia command to the server, targeting the client
+      const playPath = `/player/playback/playMedia`
+        + `?key=/library/metadata/${encodeURIComponent(ratingKey)}`
+        + `&offset=0`
+        + `&machineIdentifier=${encodeURIComponent(serverMachineId)}`
+        + `&type=video`
+        + `&X-Plex-Target-Client-Identifier=${encodeURIComponent(clientIdentifier)}`
+        + `&commandID=1`;
+
+      const playRes = await plexFetch(serverUri, playPath, plexToken, 10000);
+      return jsonResponse({ success: playRes !== null });
     }
 
     return jsonResponse({ error: `Unknown action: ${action}` }, 400);

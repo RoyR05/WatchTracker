@@ -10,9 +10,27 @@ export interface PlexAvailability {
     year: number;
     quality: string | null;
     server?: string;
+    ratingKey?: string;
+    serverUri?: string;
+    serverMachineId?: string;
   };
   serversSearched?: number;
   error?: string;
+}
+
+export interface PlexClient {
+  clientIdentifier: string;
+  name: string;
+  product: string;
+  platform: string;
+}
+
+export interface PlexDevicePermission {
+  id: string;
+  user_id: string;
+  client_identifier: string;
+  friendly_name: string;
+  created_at: string;
 }
 
 export interface PlexRequest {
@@ -237,5 +255,63 @@ export const plexService = {
       });
 
     if (error) throw error;
+  },
+
+  // ── Remote play ─────────────────────────────────────────────────────────────
+
+  /** All currently-online Plex player devices on the Master account. */
+  async getActiveClients(): Promise<PlexClient[]> {
+    const headers = await getAuthHeaders();
+    const res = await fetch(`${PLEX_PROXY_URL}?action=clients`, { headers });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data.clients ?? []) as PlexClient[];
+  },
+
+  /** This user's assigned devices (Supabase RLS ensures only their own rows). */
+  async getMyDevices(userId: string): Promise<PlexDevicePermission[]> {
+    const { data } = await supabase
+      .from('plex_device_permissions')
+      .select('*')
+      .eq('user_id', userId)
+      .order('friendly_name');
+    return (data ?? []) as PlexDevicePermission[];
+  },
+
+  /** Admin: all device assignments across all users, joined with username. */
+  async getAllDevicePermissions(): Promise<(PlexDevicePermission & { user_profiles: { username: string } })[]> {
+    const { data } = await supabase
+      .from('plex_device_permissions')
+      .select('*, user_profiles!inner(username)')
+      .order('friendly_name');
+    return (data ?? []) as (PlexDevicePermission & { user_profiles: { username: string } })[];
+  },
+
+  async assignDevice(userId: string, clientIdentifier: string, friendlyName: string): Promise<void> {
+    const { error } = await supabase
+      .from('plex_device_permissions')
+      .insert({ user_id: userId, client_identifier: clientIdentifier, friendly_name: friendlyName });
+    if (error) throw error;
+  },
+
+  async unassignDevice(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('plex_device_permissions')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
+  },
+
+  /** Fire a remote-play command. Edge function verifies ownership before executing. */
+  async playOnDevice(
+    clientIdentifier: string,
+    ratingKey: string,
+    serverUri: string,
+    serverMachineId: string
+  ): Promise<{ success: boolean; error?: string }> {
+    const headers = await getAuthHeaders();
+    const params = new URLSearchParams({ action: 'play', clientIdentifier, ratingKey, serverUri, serverMachineId });
+    const res = await fetch(`${PLEX_PROXY_URL}?${params}`, { headers });
+    return res.json();
   },
 };

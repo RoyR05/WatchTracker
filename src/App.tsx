@@ -32,6 +32,7 @@ import WatchlistPage from './pages/WatchlistPage';
 import PlexRequestsPage from './pages/PlexRequestsPage';
 import AdminPlexRequestsPage from './pages/admin/PlexRequestsPage';
 import PlexSettingsPage from './pages/admin/PlexSettingsPage';
+import { PlexDevicesPage } from './pages/admin/PlexDevicesPage';
 import { UserApprovalPage } from './pages/admin/UserApprovalPage';
 import ImportListPage from './pages/admin/ImportListPage';
 
@@ -66,6 +67,7 @@ function AnimatedRoutes() {
         <Route path="/admin/notifications" element={<AdminRoute><PageTransition><AdminNotificationsPage /></PageTransition></AdminRoute>} />
         <Route path="/admin/audit-log" element={<AdminRoute><PageTransition><AuditLogPage /></PageTransition></AdminRoute>} />
         <Route path="/admin/plex-requests" element={<AdminRoute><PageTransition><AdminPlexRequestsPage /></PageTransition></AdminRoute>} />
+        <Route path="/admin/plex-devices" element={<AdminRoute><PageTransition><PlexDevicesPage /></PageTransition></AdminRoute>} />
         <Route path="/admin/plex-settings" element={<AdminRoute><PageTransition><PlexSettingsPage /></PageTransition></AdminRoute>} />
         <Route path="/admin/approvals" element={<AdminRoute><PageTransition><UserApprovalPage /></PageTransition></AdminRoute>} />
         <Route path="/admin/import-list" element={<AdminRoute><PageTransition><ImportListPage /></PageTransition></AdminRoute>} />
