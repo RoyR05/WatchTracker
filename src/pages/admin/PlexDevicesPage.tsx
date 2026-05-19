@@ -72,7 +72,7 @@ export function PlexDevicesPage() {
 
   async function loadUsers() {
     const { data } = await supabase
-      .from('user_profiles')
+      .from('profiles')
       .select('id, username')
       .order('username');
     setUsers((data ?? []) as UserProfile[]);
