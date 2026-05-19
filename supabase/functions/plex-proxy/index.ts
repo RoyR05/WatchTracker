@@ -476,38 +476,72 @@ Deno.serve(async (req: Request) => {
         return jsonResponse({ error: "Device not assigned to this user" }, 403);
       }
 
-      // 3. Fire the Plex playMedia command to the server, targeting the client.
-      // Use a direct fetch (not plexFetch) so we can include the required
-      // X-Plex-Client-Identifier header. Without it the server accepts the
-      // request but cannot associate a controller context and silently discards
-      // the companion command. Also use the full server:// key URI so the Roku
-      // client knows which server owns the content.
-      const commandID = Date.now(); // unique per call — prevents server deduplication
-      const playUrl = `${serverUri}/player/playback/playMedia`
-        + `?key=server://${encodeURIComponent(serverMachineId)}/com.plexapp.plugins.library/library/metadata/${encodeURIComponent(ratingKey)}`
-        + `&offset=0`
-        + `&machineIdentifier=${encodeURIComponent(serverMachineId)}`
-        + `&type=video`
-        + `&X-Plex-Target-Client-Identifier=${encodeURIComponent(clientIdentifier)}`
-        + `&commandID=${commandID}`
-        + `&X-Plex-Token=${plexToken}`;
+      // 3. Two-step Plex remote-play: create play queue, then companion playMedia.
+      // Plex companion protocol expects key=/playQueues/{id}, not a raw media key.
+      // Sending server:// or /library/metadata/{id} directly causes a 400 error.
+      const plexHeaders = {
+        "Accept": "application/json",
+        "X-Plex-Token": plexToken,
+        "X-Plex-Client-Identifier": PLEX_CLIENT_ID,
+        "X-Plex-Product": "WatchTracker",
+        "X-Plex-Device": "WatchTracker Server",
+      };
 
+      // Step 1: create play queue on the server
+      const queueUri = `server://${serverMachineId}/com.plexapp.plugins.library/library/metadata/${ratingKey}`;
+      const queueParams = new URLSearchParams({
+        type: "video",
+        uri: queueUri,
+        shuffle: "0",
+        repeat: "0",
+        continuous: "1",
+        "X-Plex-Token": plexToken,
+      });
+      let playQueueKey: string;
+      try {
+        const queueRes = await fetch(`${serverUri}/playQueues?${queueParams}`, {
+          method: "POST",
+          headers: plexHeaders,
+          signal: AbortSignal.timeout(8000),
+        });
+        if (!queueRes.ok) {
+          return jsonResponse({ success: false, error: `Queue creation failed (${queueRes.status})` });
+        }
+        const queueData = await queueRes.json() as { MediaContainer?: { playQueueID?: number } };
+        const queueId = queueData?.MediaContainer?.playQueueID;
+        if (!queueId) {
+          return jsonResponse({ success: false, error: "No playQueueID in Plex response" });
+        }
+        playQueueKey = `/playQueues/${queueId}`;
+      } catch (e: unknown) {
+        return jsonResponse({ success: false, error: `Queue error: ${e instanceof Error ? e.message : String(e)}` });
+      }
+
+      // Step 2: companion playMedia using the play queue key
+      const commandID = Date.now();
+      const playParams = new URLSearchParams({
+        key: playQueueKey,
+        offset: "0",
+        machineIdentifier: serverMachineId,
+        type: "video",
+        "X-Plex-Target-Client-Identifier": clientIdentifier,
+        commandID: String(commandID),
+        "X-Plex-Token": plexToken,
+      });
       let playOk = false;
       let playError: string | undefined;
       try {
-        const playRes = await fetch(playUrl, {
+        const playRes = await fetch(`${serverUri}/player/playback/playMedia?${playParams}`, {
           headers: {
-            "Accept": "application/json",
-            "X-Plex-Client-Identifier": PLEX_CLIENT_ID,
-            "X-Plex-Product": "WatchTracker",
-            "X-Plex-Device": "WatchTracker Server",
+            ...plexHeaders,
+            "X-Plex-Target-Client-Identifier": clientIdentifier,
           },
           signal: AbortSignal.timeout(10000),
         });
         playOk = playRes.ok;
-        if (!playOk) playError = `Plex returned ${playRes.status}`;
+        if (!playOk) playError = `Play command failed (${playRes.status})`;
       } catch (e: unknown) {
-        playError = (e instanceof Error ? e.message : String(e)) ?? "Play command timed out";
+        playError = `Play timed out: ${e instanceof Error ? e.message : String(e)}`;
       }
       return jsonResponse({ success: playOk, error: playError });
     }
