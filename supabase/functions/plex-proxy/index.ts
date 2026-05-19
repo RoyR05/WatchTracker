@@ -526,24 +526,47 @@ Deno.serve(async (req: Request) => {
         return jsonResponse({ success: false, error: `Queue error: ${e instanceof Error ? e.message : String(e)}` });
       }
 
-      // Step 2: companion playMedia using the play queue key
+      // Step 2: companion playMedia via server proxy.
+      // The server proxies the command to the subscribed player (X-Plex-Target-Client-Identifier).
+      // Params tell the player how to reach the server and what to play.
       const commandID = Date.now();
+
+      // Parse server connection details so the player knows how to reach the server.
+      let serverAddress = serverUri;
+      let serverPort = "32400";
+      let serverProtocol = "https";
+      try {
+        const serverUrl = new URL(serverUri);
+        serverAddress = serverUrl.hostname;
+        serverPort = serverUrl.port || (serverUrl.protocol === "https:" ? "443" : "80");
+        serverProtocol = serverUrl.protocol.replace(":", "");
+      } catch { /* use defaults */ }
+
       const playParams = new URLSearchParams({
-        key: playQueueKey,
+        key: `/library/metadata/${ratingKey}`,            // raw media key (NOT the play queue)
+        containerKey: `${playQueueKey}?window=100&own=1`, // play queue for continuous playback context
         offset: "0",
         machineIdentifier: serverMachineId,
+        address: serverAddress,                            // player uses this to reach server
+        port: serverPort,
+        protocol: serverProtocol,
+        token: serverToken,                                // player uses this to auth with server
         type: "video",
-        "X-Plex-Target-Client-Identifier": clientIdentifier,
+        providerIdentifier: "com.plexapp.plugins.library",
         commandID: String(commandID),
-        "X-Plex-Token": serverToken,
       });
+
       let playOk = false;
       let playError: string | undefined;
       try {
         const playRes = await fetch(`${serverUri}/player/playback/playMedia?${playParams}`, {
           headers: {
-            ...plexHeaders,
-            "X-Plex-Target-Client-Identifier": clientIdentifier,
+            "Accept": "application/json",
+            "X-Plex-Token": plexToken,                    // master token — controller auth
+            "X-Plex-Client-Identifier": PLEX_CLIENT_ID,
+            "X-Plex-Product": "WatchTracker",
+            "X-Plex-Device": "WatchTracker Server",
+            "X-Plex-Target-Client-Identifier": clientIdentifier, // tells server which player to route to
           },
           signal: AbortSignal.timeout(10000),
         });
