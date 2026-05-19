@@ -478,10 +478,19 @@ Deno.serve(async (req: Request) => {
 
       // 3. Two-step Plex remote-play: create play queue, then companion playMedia.
       // Plex companion protocol expects key=/playQueues/{id}, not a raw media key.
-      // Sending server:// or /library/metadata/{id} directly causes a 400 error.
+      // Each server may have its own accessToken distinct from the master PLEX_TOKEN —
+      // use the server-specific token (from the cached server list) so the /playQueues
+      // call is not rejected with 401.
+      let serverToken = plexToken;
+      try {
+        const servers = await getCachedServers(plexToken, supabase, config);
+        const matchedServer = servers.find((s) => s.machineIdentifier === serverMachineId);
+        if (matchedServer?.accessToken) serverToken = matchedServer.accessToken;
+      } catch { /* fall back to master token */ }
+
       const plexHeaders = {
         "Accept": "application/json",
-        "X-Plex-Token": plexToken,
+        "X-Plex-Token": serverToken,
         "X-Plex-Client-Identifier": PLEX_CLIENT_ID,
         "X-Plex-Product": "WatchTracker",
         "X-Plex-Device": "WatchTracker Server",
@@ -495,7 +504,7 @@ Deno.serve(async (req: Request) => {
         shuffle: "0",
         repeat: "0",
         continuous: "1",
-        "X-Plex-Token": plexToken,
+        "X-Plex-Token": serverToken,
       });
       let playQueueKey: string;
       try {
@@ -526,7 +535,7 @@ Deno.serve(async (req: Request) => {
         type: "video",
         "X-Plex-Target-Client-Identifier": clientIdentifier,
         commandID: String(commandID),
-        "X-Plex-Token": plexToken,
+        "X-Plex-Token": serverToken,
       });
       let playOk = false;
       let playError: string | undefined;
