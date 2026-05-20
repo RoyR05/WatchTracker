@@ -14,6 +14,7 @@ import { userSettingsService } from '../services/userSettings';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { queryKeys } from '../lib/queryKeys';
+import { useScrollRestoration } from '../hooks/useScrollRestoration';
 import type { Movie, TVShow, TVShowDetails } from '../services/tmdb';
 
 interface WatchlistItem {
@@ -106,6 +107,7 @@ function WatchlistCard({ item, statusLabel, badgeClass, posterOverride, showDays
 }
 
 export default function Dashboard() {
+  useScrollRestoration();
   const { user } = useAuth();
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -442,7 +444,7 @@ export default function Dashboard() {
             const type = 'title' in item ? 'movie' : 'tv';
             return (
               <div key={item.id} className="flex-shrink-0 w-40 sm:w-48 snap-start">
-                <MediaCard item={item} mediaType={type} initialPreference={preferenceMap.get(`${item.id}-${type}`) ?? null} onDislike={(id) => setLocalDislikes(prev => new Set(prev).add(id))} />
+                <MediaCard item={item} mediaType={type} initialPreference={preferenceMap.get(`${item.id}-${type}`) ?? null} onDislike={(id) => setLocalDislikes(prev => new Set(prev).add(id))} disableSwipe />
               </div>
             );
           })}
@@ -462,7 +464,7 @@ export default function Dashboard() {
             const type = 'title' in item ? 'movie' : 'tv';
             return (
               <div key={item.id} className="flex-shrink-0 w-40 sm:w-48 snap-start">
-                <MediaCard item={item} mediaType={type} initialPreference={preferenceMap.get(`${item.id}-${type}`) ?? null} onDislike={(id) => setLocalDislikes(prev => new Set(prev).add(id))} />
+                <MediaCard item={item} mediaType={type} initialPreference={preferenceMap.get(`${item.id}-${type}`) ?? null} onDislike={(id) => setLocalDislikes(prev => new Set(prev).add(id))} disableSwipe />
               </div>
             );
           })}
@@ -482,7 +484,7 @@ export default function Dashboard() {
             const type = 'title' in item ? 'movie' : 'tv';
             return (
               <div key={item.id} className="flex-shrink-0 w-40 sm:w-48 snap-start">
-                <MediaCard item={item} mediaType={type} initialPreference={preferenceMap.get(`${item.id}-${type}`) ?? null} onDislike={(id) => setLocalDislikes(prev => new Set(prev).add(id))} />
+                <MediaCard item={item} mediaType={type} initialPreference={preferenceMap.get(`${item.id}-${type}`) ?? null} onDislike={(id) => setLocalDislikes(prev => new Set(prev).add(id))} disableSwipe />
               </div>
             );
           })}

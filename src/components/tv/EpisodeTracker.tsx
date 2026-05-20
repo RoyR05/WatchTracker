@@ -471,9 +471,11 @@ export function EpisodeTracker({ tvId, numberOfSeasons, seasons, showStatus, onA
       })()}
 
       <div className="space-y-3">
-        {seasonDetails.episodes.map((episode, index) => {
+        {(() => {
+          const maxEpisodeNumber = Math.max(...seasonDetails.episodes.map(e => e.episode_number));
+          return seasonDetails.episodes.map((episode) => {
           const watched = isEpisodeWatched(episode.episode_number);
-          const isFinale = index === seasonDetails.episodes.length - 1;
+          const isFinale = episode.episode_number === maxEpisodeNumber;
           const isUpcoming = episode.air_date && new Date(episode.air_date) > new Date();
 
           return (
@@ -518,7 +520,7 @@ export function EpisodeTracker({ tvId, numberOfSeasons, seasons, showStatus, onA
                 <p className="text-sm text-gray-400 mt-1 line-clamp-2">{episode.overview}</p>
                 <div className="flex items-center gap-4 mt-2">
                   {episode.air_date && (
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-gray-400">
                       {new Date(episode.air_date).toLocaleDateString('en-US', {
                         month: 'short',
                         day: 'numeric',
@@ -526,7 +528,7 @@ export function EpisodeTracker({ tvId, numberOfSeasons, seasons, showStatus, onA
                       })}
                     </p>
                   )}
-                  {isFinale && episode.air_date && isUpcoming && (
+                  {isFinale && episode.air_date && isUpcoming && !watched && (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -552,7 +554,8 @@ export function EpisodeTracker({ tvId, numberOfSeasons, seasons, showStatus, onA
               )}
             </div>
           );
-        })}
+        });
+        })()}
       </div>
     </div>
   );

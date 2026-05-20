@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Layout } from '../components/layout/Layout';
 import { MediaCard } from '../components/media/MediaCard';
 import { PersonCard, PersonResult } from '../components/media/PersonCard';
 import { SkeletonGrid } from '../components/ui/Skeleton';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
+import { useScrollRestoration } from '../hooks/useScrollRestoration';
 import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../contexts/AuthContext';
 import { tmdbService } from '../services/tmdb';
@@ -19,42 +21,57 @@ function resultType(item: SearchResult): 'movie' | 'tv' | 'person' {
 }
 
 export default function SearchPage() {
+  useScrollRestoration();
   const { user } = useAuth();
-  const [query, setQuery] = useState('');
-  const [mediaFilter, setMediaFilter] = useState<MediaFilter>('all');
+  const toast = useToast();
+
+  // q and filter live in the URL so Back button restores them.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlQuery = searchParams.get('q') ?? '';
+  const urlFilter = (searchParams.get('filter') as MediaFilter) ?? 'all';
+
+  // inputValue is the live text-box content; initialized from URL on mount.
+  const [inputValue, setInputValue] = useState(urlQuery);
+
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [searched, setSearched] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [preferenceMap, setPreferenceMap] = useState<Map<string, 'like' | 'dislike'>>(new Map());
-  const toast = useToast();
 
+  // Track last query we actually fetched so we don't double-fetch
+  const fetchedQuery = useRef('');
+
+  // When the URL query param changes (including on initial mount), run the search.
+  useEffect(() => {
+    if (!urlQuery.trim() || urlQuery === fetchedQuery.current) return;
+    fetchedQuery.current = urlQuery;
+    runSearch(urlQuery, 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlQuery]);
+
+  // Keep inputValue in sync when URL changes (e.g. browser back/forward).
+  useEffect(() => {
+    setInputValue(urlQuery);
+  }, [urlQuery]);
+
+  // Load preferences whenever results change.
   useEffect(() => {
     if (!user || results.length === 0) return;
     const items = results
       .filter(item => resultType(item) !== 'person')
-      .map(item => ({
-        tmdbId: item.id,
-        mediaType: resultType(item) as 'movie' | 'tv',
-      }));
+      .map(item => ({ tmdbId: item.id, mediaType: resultType(item) as 'movie' | 'tv' }));
     if (items.length === 0) return;
     preferencesService.getPreferencesForItems(items, user.id).then(setPreferenceMap);
   }, [user, results]);
 
-  const filteredResults = mediaFilter === 'all'
-    ? results
-    : results.filter(item => resultType(item) === mediaFilter);
-
-  async function handleSearch(e: React.FormEvent) {
-    e.preventDefault();
-    if (!query.trim()) return;
+  async function runSearch(q: string, page: number) {
+    if (!q.trim()) return;
     setLoading(true);
-    setSearched(true);
     setCurrentPage(1);
     try {
-      const data = await tmdbService.searchMulti(query, 1);
+      const data = await tmdbService.searchMulti(q, page);
       const filtered = (data.results as any[]).filter(
         item => item.media_type === 'movie' || item.media_type === 'tv' || item.media_type === 'person'
       );
@@ -69,11 +86,11 @@ export default function SearchPage() {
   }
 
   async function loadMore() {
-    if (loadingMore || currentPage >= totalPages) return;
+    if (loadingMore || currentPage >= totalPages || !urlQuery.trim()) return;
     setLoadingMore(true);
     try {
       const nextPage = currentPage + 1;
-      const data = await tmdbService.searchMulti(query, nextPage);
+      const data = await tmdbService.searchMulti(urlQuery, nextPage);
       const filtered = (data.results as any[]).filter(
         item => item.media_type === 'movie' || item.media_type === 'tv' || item.media_type === 'person'
       );
@@ -86,11 +103,31 @@ export default function SearchPage() {
     }
   }
 
+  function handleSearch(e: React.FormEvent) {
+    e.preventDefault();
+    if (!inputValue.trim()) return;
+    // Push the query into the URL — the useEffect above will fire and run the search.
+    fetchedQuery.current = ''; // reset so the effect re-fetches even if same query
+    setSearchParams({ q: inputValue.trim(), filter: urlFilter });
+  }
+
+  function setFilter(f: MediaFilter) {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      next.set('filter', f);
+      return next;
+    }, { replace: true });
+  }
+
   const { observerTarget } = useInfiniteScroll({
     hasMore: currentPage < totalPages,
     isLoading: loadingMore,
     onLoadMore: loadMore,
   });
+
+  const filteredResults = urlFilter === 'all'
+    ? results
+    : results.filter(item => resultType(item) === urlFilter);
 
   const filterButtons: { label: string; value: MediaFilter }[] = [
     { label: 'All', value: 'all' },
@@ -100,10 +137,10 @@ export default function SearchPage() {
   ];
 
   const countFor = (v: MediaFilter) => results.filter(r => resultType(r) === v).length;
-
-  const filterNoun = mediaFilter === 'movie' ? 'movie'
-    : mediaFilter === 'tv' ? 'TV show'
-    : mediaFilter === 'person' ? 'person' : '';
+  const filterNoun = urlFilter === 'movie' ? 'movie'
+    : urlFilter === 'tv' ? 'TV show'
+    : urlFilter === 'person' ? 'person' : '';
+  const hasSearched = !!urlQuery.trim();
 
   return (
     <Layout>
@@ -121,8 +158,8 @@ export default function SearchPage() {
             </svg>
             <input
               type="text"
-              value={query}
-              onChange={e => setQuery(e.target.value)}
+              value={inputValue}
+              onChange={e => setInputValue(e.target.value)}
               placeholder="Search movies, TV shows, people..."
               className="w-full px-4 py-3 pl-12 pr-28 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             />
@@ -136,14 +173,14 @@ export default function SearchPage() {
         </form>
 
         {/* Media type filter — only show after a search */}
-        {searched && (
+        {hasSearched && (
           <div className="flex gap-2 mb-6 flex-wrap">
             {filterButtons.map(btn => (
               <button
                 key={btn.value}
-                onClick={() => setMediaFilter(btn.value)}
+                onClick={() => setFilter(btn.value)}
                 className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                  mediaFilter === btn.value
+                  urlFilter === btn.value
                     ? 'bg-primary-600 text-white'
                     : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                 }`}
@@ -196,7 +233,7 @@ export default function SearchPage() {
           </div>
         )}
 
-        {!loading && searched && filteredResults.length === 0 && (
+        {!loading && hasSearched && filteredResults.length === 0 && (
           <div className="bg-gray-800 rounded-lg p-12 text-center">
             <svg className="mx-auto h-12 w-12 text-gray-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -204,14 +241,14 @@ export default function SearchPage() {
             </svg>
             <p className="text-white font-medium mb-1">No results found</p>
             <p className="text-gray-400 text-sm">
-              {mediaFilter !== 'all'
-                ? `No ${filterNoun}s matched "${query}". Try switching the filter to All.`
-                : `No results for "${query}". Try different keywords.`}
+              {urlFilter !== 'all'
+                ? `No ${filterNoun}s matched "${urlQuery}". Try switching the filter to All.`
+                : `No results for "${urlQuery}". Try different keywords.`}
             </p>
           </div>
         )}
 
-        {!searched && !loading && (
+        {!hasSearched && !loading && (
           <div className="bg-gray-800 rounded-lg p-12 text-center">
             <svg className="mx-auto h-12 w-12 text-gray-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}

@@ -14,6 +14,7 @@ import { preferencesService } from '../services/preferences';
 import { followedPeopleService, FollowedFeedItem } from '../services/followedPeople';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { useScrollRestoration } from '../hooks/useScrollRestoration';
 import type { Movie, TVShow } from '../services/tmdb';
 
 function feedItemToMedia(it: FollowedFeedItem): Movie | TVShow {
@@ -31,6 +32,7 @@ function feedItemToMedia(it: FollowedFeedItem): Movie | TVShow {
 }
 
 export default function DiscoveryPage() {
+  useScrollRestoration();
   const { user } = useAuth();
   const [selectedGenre, setSelectedGenre] = useState<{ id: number; name: string } | null>(null);
   const [selectedProvider, setSelectedProvider] = useState<{ id: number | string; name: string } | null>(null);
@@ -232,6 +234,7 @@ export default function DiscoveryPage() {
                         item={item}
                         mediaType={mt}
                         initialPreference={preferenceMap.get(`${item.id}-${mt}`) ?? null}
+                        disableSwipe
                       />
                     </div>
                   );
@@ -293,6 +296,7 @@ export default function DiscoveryPage() {
                           initialPreference={followedPrefMap.get(`${item.id}-${mt}`) ?? null}
                           onDislike={(id) => hideFollowedItem(id)}
                           onHide={hideFollowedItem}
+                          disableSwipe
                         />
                       </div>
                     );

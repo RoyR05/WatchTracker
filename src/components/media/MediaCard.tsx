@@ -18,11 +18,13 @@ interface MediaCardProps {
   initialPreference?: 'like' | 'dislike' | null;
   onDislike?: (tmdbId: number) => void;
   onHide?: (tmdbId: number) => void;
+  /** Disable swipe-to-add/complete gestures. Use for cards inside horizontal scroll rows. */
+  disableSwipe?: boolean;
 }
 
 type WatchlistStatus = 'watching' | 'completed' | 'plan_to_watch' | 'dropped';
 
-export function MediaCard({ item, mediaType, initialPreference = null, onDislike, onHide }: MediaCardProps) {
+export function MediaCard({ item, mediaType, initialPreference = null, onDislike, onHide, disableSwipe = false }: MediaCardProps) {
   const { user } = useAuth();
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -174,7 +176,7 @@ export function MediaCard({ item, mediaType, initialPreference = null, onDislike
           transform: `translateX(${swipeOffset}px)`,
           transition: swipeOffset !== 0 ? 'transform 0.3s ease-out' : 'none',
         }}
-        {...swipeGesture}
+        {...(disableSwipe ? {} : swipeGesture)}
       >
         <Link to={`/details/${mediaType}/${item.id}`} className="block">
           <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-gray-800">

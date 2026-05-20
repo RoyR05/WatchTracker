@@ -27,17 +27,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        loadProfile(session.user.id);
-      } else {
-        setLoading(false);
-      }
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    // onAuthStateChange fires INITIAL_SESSION immediately on subscription,
+    // so we don't need a separate getSession() call (which would cause a
+    // double loadProfile race). Single source of truth.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       (async () => {
         setSession(session);
         setUser(session?.user ?? null);
@@ -54,6 +47,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   async function loadProfile(userId: string) {
+    // Retry once after 2s in case of a transient network failure on app open.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        await loadProfileAttempt(userId);
+        return;
+      } catch (error) {
+        if (attempt === 0) {
+          console.warn('[Auth] loadProfile failed, retrying in 2s:', error);
+          await new Promise(r => setTimeout(r, 2000));
+        } else {
+          console.error('[Auth] loadProfile failed after retry:', error);
+          setLoading(false);
+        }
+      }
+    }
+  }
+
+  async function loadProfileAttempt(userId: string) {
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -109,9 +120,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         setProfile(data);
       }
-    } catch (error) {
-      console.error('[Auth] Error in loadProfile:', error);
-      setProfile(null);
     } finally {
       setLoading(false);
     }
