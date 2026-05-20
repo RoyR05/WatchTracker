@@ -86,9 +86,10 @@ Deno.serve(async (req: Request) => {
       headers: { "Content-Type": "application/json" },
     });
 
-    const data = await response.json();
-
-    return new Response(JSON.stringify(data), {
+    // Stream the response body directly — do NOT buffer with response.json() + JSON.stringify().
+    // Large TMDB payloads (credits, trending, unfiltered discover) exceed the ~2MB edge-function
+    // heap buffer and throw, causing 500s. Streaming bypasses that limit entirely.
+    return new Response(response.body, {
       status: response.status,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

@@ -1,4 +1,4 @@
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useState, useRef, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { tmdbService } from '../../services/tmdb';
@@ -6,12 +6,9 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { useSwipeGesture } from '../../hooks/useSwipeGesture';
-import { useLongPress } from '../../hooks/useLongPress';
-import { ContextMenu, ContextMenuItem } from '../ui/ContextMenu';
 import { AddToListModal } from '../lists/AddToListModal';
 import { RecommendModal } from '../recommendations/RecommendModal';
 import { preferencesService } from '../../services/preferences';
-import { plexService } from '../../services/plex';
 import type { Movie, TVShow } from '../../services/tmdb';
 import type { Database } from '../../types/database.types';
 
@@ -28,14 +25,11 @@ type WatchlistStatus = 'watching' | 'completed' | 'plan_to_watch' | 'dropped';
 export function MediaCard({ item, mediaType, initialPreference = null, onDislike, onHide }: MediaCardProps) {
   const { user } = useAuth();
   const toast = useToast();
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const title = 'title' in item ? item.title : item.name;
   const date = 'release_date' in item ? item.release_date : item.first_air_date;
   const year = date ? new Date(date).getFullYear() : 'N/A';
   const [imageError, setImageError] = useState(false);
-  const [showContextMenu, setShowContextMenu] = useState(false);
-  const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
   const [swipeOffset, setSwipeOffset] = useState(0);
   const [showAddToListModal, setShowAddToListModal] = useState(false);
   const [showRecommendModal, setShowRecommendModal] = useState(false);
@@ -166,130 +160,10 @@ export function MediaCard({ item, mediaType, initialPreference = null, onDislike
     threshold: 80,
   });
 
-  const longPress = useLongPress({
-    onLongPress: (e) => {
-      e.preventDefault();
-      const touch = 'touches' in e ? e.touches[0] : e as React.MouseEvent;
-      setContextMenuPosition({
-        x: touch.clientX,
-        y: touch.clientY,
-      });
-      setShowContextMenu(true);
-    },
-  });
-
   function animateSwipe(offset: number) {
     setSwipeOffset(offset);
     setTimeout(() => setSwipeOffset(0), 300);
   }
-
-  const contextMenuItems: ContextMenuItem[] = [
-    {
-      label: preference === 'like' ? 'Remove Like' : 'Like',
-      icon: (
-        <svg className="w-5 h-5" fill={preference === 'like' ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
-        </svg>
-      ),
-      onClick: handleLike,
-    },
-    {
-      label: preference === 'dislike' ? 'Remove Dislike' : 'Dislike',
-      icon: (
-        <svg className="w-5 h-5" fill={preference === 'dislike' ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14H5.236a2 2 0 01-1.789-2.894l3.5-7A2 2 0 018.736 3h4.018a2 2 0 01.485.06l3.76.94m-7 10v5a2 2 0 002 2h.096c.5 0 .905-.405.905-.904 0-.715.211-1.413.608-2.008L17 13V4m-7 10h2m5-10h2a2 2 0 012 2v6a2 2 0 01-2 2h-2.5" />
-        </svg>
-      ),
-      onClick: handleDislike,
-    },
-    {
-      label: 'View Details',
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-      ),
-      onClick: () => navigate(`/details/${mediaType}/${item.id}`),
-    },
-    {
-      label: 'Plan to Watch',
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-        </svg>
-      ),
-      onClick: () => addToWatchlist('plan_to_watch'),
-    },
-    {
-      label: 'Watching',
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-      ),
-      onClick: () => addToWatchlist('watching'),
-    },
-    {
-      label: 'Completed',
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-      ),
-      onClick: () => addToWatchlist('completed'),
-    },
-    {
-      label: 'Add to List',
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-        </svg>
-      ),
-      onClick: () => setShowAddToListModal(true),
-    },
-    {
-      label: 'Recommend',
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-        </svg>
-      ),
-      onClick: () => setShowRecommendModal(true),
-    },
-    {
-      label: 'Check on Plex',
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2" />
-        </svg>
-      ),
-      onClick: async () => {
-        try {
-          toast.info('Checking Plex...');
-          const yearStr = typeof year === 'number' ? String(year) : null;
-          const result = await plexService.checkAvailability(title, yearStr, mediaType);
-          if (result.available) {
-            const quality = result.match?.quality ? ` (${result.match.quality})` : '';
-            toast.success(`Available on Plex${quality}`);
-          } else {
-            toast.error('Not on Plex');
-          }
-        } catch {
-          toast.error('Failed to check Plex');
-        }
-      },
-    },
-    ...(onHide ? [{
-      label: 'Hide from feed',
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 4.411m0 0L21 21" />
-        </svg>
-      ),
-      onClick: () => onHide(item.id),
-    }] : []),
-  ];
 
   return (
     <>
@@ -301,7 +175,6 @@ export function MediaCard({ item, mediaType, initialPreference = null, onDislike
           transition: swipeOffset !== 0 ? 'transform 0.3s ease-out' : 'none',
         }}
         {...swipeGesture}
-        {...longPress}
       >
         <Link to={`/details/${mediaType}/${item.id}`} className="block">
           <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-gray-800">
@@ -412,14 +285,6 @@ export function MediaCard({ item, mediaType, initialPreference = null, onDislike
           </div>
         )}
       </div>
-
-      {showContextMenu && (
-        <ContextMenu
-          items={contextMenuItems}
-          position={contextMenuPosition}
-          onClose={() => setShowContextMenu(false)}
-        />
-      )}
 
       <AddToListModal
         isOpen={showAddToListModal}

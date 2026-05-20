@@ -42,7 +42,7 @@ const STEPS: Step[] = [
   {
     icon: '👆',
     title: 'Handy gestures (mobile)',
-    body: 'On a phone: swipe a card right to add to Plan to Watch, swipe left to mark Completed, and long-press for a quick-action menu.',
+    body: 'On a phone: swipe a card right to add to Plan to Watch, swipe left to mark Completed.',
   },
   {
     icon: '🎯',

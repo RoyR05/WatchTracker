@@ -17,21 +17,34 @@ export function PersonPage() {
   const [following, setFollowing] = useState(false);
   const [followBusy, setFollowBusy] = useState(false);
 
+  const [fetchError, setFetchError] = useState<string | null>(null);
+
   useEffect(() => {
     if (!id) return;
 
     const fetchPersonData = async () => {
       try {
         setLoading(true);
-        const [personData, creditsData] = await Promise.all([
+        setFetchError(null);
+
+        // Use allSettled so a failed credits call (e.g. Samuel L. Jackson's 200+ credits
+        // exceeding the edge-function buffer) doesn't block the entire person page.
+        const [personResult, creditsResult] = await Promise.allSettled([
           tmdbService.getPersonDetails(parseInt(id)),
-          tmdbService.getPersonCombinedCredits(parseInt(id))
+          tmdbService.getPersonCombinedCredits(parseInt(id)),
         ]);
 
-        setPerson(personData);
-        setCredits(creditsData);
+        if (personResult.status === 'rejected') {
+          setFetchError('Could not load person data. Please try again.');
+          return;
+        }
+
+        setPerson(personResult.value);
+        // Credits may be null if they failed — page still renders without them
+        setCredits(creditsResult.status === 'fulfilled' ? creditsResult.value : null);
       } catch (error) {
         console.error('Error fetching person data:', error);
+        setFetchError('Could not load person data. Please try again.');
       } finally {
         setLoading(false);
       }
@@ -81,24 +94,32 @@ export function PersonPage() {
     );
   }
 
-  if (!person || !credits) {
+  if (fetchError || !person) {
     return (
       <Layout>
         <div className="text-center py-12">
-          <p className="text-gray-400">Person not found</p>
+          <p className="text-gray-400">{fetchError || 'Person not found'}</p>
+          {fetchError && (
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-4 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm"
+            >
+              Try Again
+            </button>
+          )}
         </div>
       </Layout>
     );
   }
 
-  const movieCredits = credits.cast.filter((credit): credit is MovieCredit => 'title' in credit)
+  const movieCredits = (credits?.cast ?? []).filter((credit): credit is MovieCredit => 'title' in credit)
     .sort((a, b) => {
       const dateA = a.release_date ? new Date(a.release_date).getTime() : 0;
       const dateB = b.release_date ? new Date(b.release_date).getTime() : 0;
       return dateB - dateA;
     });
 
-  const tvCredits = credits.cast.filter((credit): credit is TVCredit => 'name' in credit)
+  const tvCredits = (credits?.cast ?? []).filter((credit): credit is TVCredit => 'name' in credit)
     .sort((a, b) => {
       const dateA = a.first_air_date ? new Date(a.first_air_date).getTime() : 0;
       const dateB = b.first_air_date ? new Date(b.first_air_date).getTime() : 0;

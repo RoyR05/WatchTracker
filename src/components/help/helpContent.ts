@@ -49,7 +49,7 @@ export const HELP_TOPICS: HelpTopic[] = [
     bullets: [
       'Statuses: Watching, Plan to Watch, Completed, Dropped.',
       'Filter by Movies/TV, sort, and search within your list.',
-      'Set a status from any title page or by long-pressing a card.',
+      'Set a status from any title page or by swiping a card.',
     ],
   },
   {

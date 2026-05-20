@@ -12,6 +12,7 @@ import { useToast } from '../contexts/ToastContext';
 import { preferencesService } from '../services/preferences';
 import { followedPeopleService } from '../services/followedPeople';
 import { CreditCard } from '../components/media/CreditCard';
+import { CollapsibleSection } from '../components/ui/CollapsibleSection';
 import { plexService } from '../services/plex';
 import { queryKeys } from '../lib/queryKeys';
 import type { PlexAvailability, PlexRequest } from '../services/plex';
@@ -901,7 +902,8 @@ export default function DetailPage() {
           <div className="max-w-7xl mx-auto py-8">
             {/* My Note */}
             {watchlistItem && (
-              <div className="mb-8 bg-gray-800 rounded-xl p-5">
+              <CollapsibleSection id="detail-notes" title="My Note" defaultCollapsed={true}>
+              <div className="bg-gray-800 rounded-xl p-5">
                 <div className="flex items-center justify-between mb-3">
                   <h2 className="text-lg font-semibold text-white">My Note</h2>
                   <button
@@ -935,37 +937,43 @@ export default function DetailPage() {
                   {noteSaving ? 'Saving…' : 'Save Note'}
                 </button>
               </div>
+              </CollapsibleSection>
             )}
 
             {/* Friends' Notes */}
             {friendsNotes.length > 0 && (
-              <div className="mb-8">
-                <h2 className="text-lg font-semibold text-white mb-3">Friends' Notes</h2>
-                <div className="space-y-3">
-                  {friendsNotes.map(fn => (
-                    <div key={fn.user_id} className="bg-gray-800 rounded-xl p-4 flex gap-3">
-                      <div className="flex-shrink-0 w-9 h-9 rounded-full bg-gray-700 flex items-center justify-center overflow-hidden">
-                        {fn.avatar_url ? (
-                          <img src={fn.avatar_url} alt={fn.username} className="w-full h-full object-cover" />
-                        ) : (
-                          <span className="text-sm font-semibold text-gray-300">{fn.username.charAt(0).toUpperCase()}</span>
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-sm font-medium text-white">{fn.username}</span>
-                          <span className="text-xs text-gray-500">{new Date(fn.updated_at).toLocaleDateString()}</span>
-                        </div>
-                        <p className="text-sm text-gray-300 whitespace-pre-wrap">{fn.notes}</p>
-                      </div>
+              <CollapsibleSection id="detail-friends-notes" title="Friends' Notes" defaultCollapsed={true} itemCount={friendsNotes.length}>
+              <div className="space-y-3">
+                {friendsNotes.map(fn => (
+                  <div key={fn.user_id} className="bg-gray-800 rounded-xl p-4 flex gap-3">
+                    <div className="flex-shrink-0 w-9 h-9 rounded-full bg-gray-700 flex items-center justify-center overflow-hidden">
+                      {fn.avatar_url ? (
+                        <img src={fn.avatar_url} alt={fn.username} className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-sm font-semibold text-gray-300">{fn.username.charAt(0).toUpperCase()}</span>
+                      )}
                     </div>
-                  ))}
-                </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-sm font-medium text-white">{fn.username}</span>
+                        <span className="text-xs text-gray-500">{new Date(fn.updated_at).toLocaleDateString()}</span>
+                      </div>
+                      <p className="text-sm text-gray-300 whitespace-pre-wrap">{fn.notes}</p>
+                    </div>
+                  </div>
+                ))}
               </div>
+              </CollapsibleSection>
             )}
 
             {(cast.length > 0 || groupedCrew.length > 0) && (
-              <div className="mb-8">
+              <CollapsibleSection
+                id="detail-people"
+                title="Cast & Crew"
+                defaultCollapsed={true}
+                itemCount={peopleTab === 'cast' ? cast.length : groupedCrew.length}
+              >
+              <div>
                 <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
                   <div className="flex gap-2">
                     <button
@@ -1048,6 +1056,7 @@ export default function DetailPage() {
                       })}
                 </div>
               </div>
+              </CollapsibleSection>
             )}
 
             {mediaType === 'tv' && 'number_of_seasons' in details && watchlistItem && (
