@@ -14,7 +14,7 @@ import { followedPeopleService } from '../services/followedPeople';
 import { CreditCard } from '../components/media/CreditCard';
 import { plexService } from '../services/plex';
 import { queryKeys } from '../lib/queryKeys';
-import type { PlexAvailability, PlexRequest, PlexDevicePermission } from '../services/plex';
+import type { PlexAvailability, PlexRequest } from '../services/plex';
 import type { MovieDetails, TVShowDetails, Video, CastMember, CrewMember, VideosResponse } from '../services/tmdb';
 import type { Database } from '../types/database.types';
 
@@ -135,11 +135,6 @@ export default function DetailPage() {
   const [plexAvailability, setPlexAvailability] = useState<PlexAvailability | null>(null);
   const [plexRequest, setPlexRequest] = useState<PlexRequest | null>(null);
   const [plexSubmitting, setPlexSubmitting] = useState(false);
-  const [plexDevices, setPlexDevices] = useState<PlexDevicePermission[]>([]);
-  const [plexOnlineIds, setPlexOnlineIds] = useState<string[]>([]);
-  const [playStatus, setPlayStatus] = useState<'idle' | 'loading' | 'sending' | 'sent' | 'error'>('idle');
-  const [showDeviceDropdown, setShowDeviceDropdown] = useState(false);
-
   // Notes
   const [noteText, setNoteText] = useState('');
   const [noteIsPrivate, setNoteIsPrivate] = useState(false);
@@ -445,57 +440,6 @@ export default function DetailPage() {
       const msg = error?.message || 'Failed to check Plex availability';
       setPlexStatus('error');
       toast.error(msg);
-    }
-  }
-
-  async function handleOpenPlayDropdown() {
-    if (!user) return;
-    setPlayStatus('loading');
-    setShowDeviceDropdown(true);
-    try {
-      // getMyDevices is required — throws on failure
-      const myDevices = await plexService.getMyDevices(user.id);
-      setPlexDevices(myDevices);
-      // getActiveClients is best-effort for online badges; failure just hides badges
-      try {
-        const activeClients = await plexService.getActiveClients();
-        setPlexOnlineIds(activeClients.map(c => c.clientIdentifier));
-      } catch {
-        setPlexOnlineIds([]);
-      }
-    } catch (err: any) {
-      toast.error(err?.message || 'Could not load your Plex devices.');
-      setPlexDevices([]);
-      setPlexOnlineIds([]);
-    } finally {
-      setPlayStatus('idle');
-    }
-  }
-
-  async function handlePlay(clientIdentifier: string) {
-    const match = plexAvailability?.match;
-    if (!match?.ratingKey || !match?.serverUri || !match?.serverMachineId) return;
-    setPlayStatus('sending');
-    try {
-      const result = await plexService.playOnDevice(
-        clientIdentifier,
-        match.ratingKey,
-        match.serverUri,
-        match.serverMachineId
-      );
-      if (result.success) {
-        setPlayStatus('sent');
-        setTimeout(() => {
-          setPlayStatus('idle');
-          setShowDeviceDropdown(false);
-        }, 2500);
-      } else {
-        setPlayStatus('error');
-        toast.error(result.error || 'Play command failed');
-      }
-    } catch {
-      setPlayStatus('error');
-      toast.error('Play command failed');
     }
   }
 
@@ -860,77 +804,6 @@ export default function DetailPage() {
                           </span>
                         )}
                       </div>
-
-                      {/* Play on Plex — only shown when ratingKey is present (requires up-to-date edge fn) */}
-                      {plexAvailability?.match?.ratingKey && (
-                        <div className="relative">
-                          <button
-                            onClick={handleOpenPlayDropdown}
-                            disabled={playStatus === 'loading' || playStatus === 'sending'}
-                            className="flex items-center gap-2 px-4 py-2 rounded-md bg-green-600/80 text-white hover:bg-green-600 font-medium transition-all backdrop-blur-sm disabled:opacity-60"
-                          >
-                            {playStatus === 'sending' ? (
-                              <>
-                                <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white" />
-                                Sending…
-                              </>
-                            ) : playStatus === 'sent' ? (
-                              <>
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                </svg>
-                                Sent!
-                              </>
-                            ) : (
-                              <>
-                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                                  <path d="M8 5v14l11-7z" />
-                                </svg>
-                                Play on Plex
-                              </>
-                            )}
-                          </button>
-
-                          {showDeviceDropdown && playStatus !== 'sending' && playStatus !== 'sent' && (
-                            <div className="absolute left-0 top-full mt-1 z-50 bg-gray-800 border border-gray-700 rounded-lg shadow-xl min-w-[220px]">
-                              {playStatus === 'loading' ? (
-                                <div className="px-4 py-3 text-sm text-gray-400 flex items-center gap-2">
-                                  <div className="animate-spin rounded-full h-3 w-3 border-t-2 border-b-2 border-white" />
-                                  Fetching your TVs…
-                                </div>
-                              ) : plexDevices.length === 0 ? (
-                                <div className="px-4 py-3 text-sm text-gray-400">
-                                  No TVs assigned to your account.
-                                </div>
-                              ) : (
-                                plexDevices.map(device => {
-                                  const isOnline = plexOnlineIds.includes(device.client_identifier);
-                                  return (
-                                    <button
-                                      key={device.id}
-                                      onClick={() => handlePlay(device.client_identifier)}
-                                      className="w-full text-left px-4 py-3 text-sm text-white hover:bg-gray-700 first:rounded-t-lg last:rounded-b-lg transition-colors flex items-center justify-between gap-3"
-                                    >
-                                      <span>📺 {device.friendly_name}</span>
-                                      {plexOnlineIds.length > 0 && (
-                                        <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full ${isOnline ? 'bg-green-600/30 text-green-300' : 'bg-gray-600/50 text-gray-400'}`}>
-                                          {isOnline ? 'Online' : 'Offline'}
-                                        </span>
-                                      )}
-                                    </button>
-                                  );
-                                })
-                              )}
-                              <button
-                                onClick={() => { setShowDeviceDropdown(false); setPlayStatus('idle'); }}
-                                className="w-full text-left px-4 py-2 text-xs text-gray-500 hover:text-gray-300 transition-colors border-t border-gray-700 rounded-b-lg"
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      )}
 
                       {mediaType === 'tv' && (
                         <p className="text-xs text-white/40 italic">
