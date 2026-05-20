@@ -81,16 +81,36 @@ Deno.serve(async (req: Request) => {
 
     const tmdbUrl = `${TMDB_BASE_URL}${endpoint}?${url.searchParams.toString()}`;
 
-    const response = await fetch(tmdbUrl, {
-      method: "GET",
-      headers: { "Content-Type": "application/json" },
-    });
+    // Use AbortController to enforce a 15s timeout — prevents the 150s stall
+    // that occurs when Supabase's runtime can't stream chunked TMDB responses.
+    const controller = new AbortController();
+    const fetchTimeout = setTimeout(() => controller.abort(), 15000);
 
-    // Stream the response body directly — do NOT buffer with response.json() + JSON.stringify().
-    // Large TMDB payloads (credits, trending, unfiltered discover) exceed the ~2MB edge-function
-    // heap buffer and throw, causing 500s. Streaming bypasses that limit entirely.
-    return new Response(response.body, {
-      status: response.status,
+    let tmdbResponse: Response;
+    try {
+      tmdbResponse = await fetch(tmdbUrl, {
+        method: "GET",
+        signal: controller.signal,
+      });
+      clearTimeout(fetchTimeout);
+    } catch (fetchErr: any) {
+      clearTimeout(fetchTimeout);
+      if (fetchErr.name === 'AbortError') {
+        return new Response(JSON.stringify({ error: 'TMDB request timed out' }), {
+          status: 504,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      throw fetchErr;
+    }
+
+    // response.text() reads the raw JSON bytes as a string — no JSON.parse / JSON.stringify
+    // double-allocation (which caused v17 crashes), and no streaming backpressure stall
+    // (which caused v18's 150s hangs). TMDB non-JSON error bodies pass through intact.
+    const text = await tmdbResponse.text();
+
+    return new Response(text, {
+      status: tmdbResponse.status,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
