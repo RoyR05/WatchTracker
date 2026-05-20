@@ -279,7 +279,24 @@ function buildBrowseParams(
 
 async function tmdbFetch(endpoint: string, params: Record<string, string> = {}, retries = 0): Promise<any> {
   const searchParams = new URLSearchParams({ endpoint, ...params });
-  const response = await fetch(`${TMDB_PROXY_URL}?${searchParams.toString()}`);
+  // 20s client-side timeout so a hung or 500ing request fails visibly
+  // instead of leaving a spinner on screen forever.
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 20000);
+
+  let response: Response;
+  try {
+    response = await fetch(`${TMDB_PROXY_URL}?${searchParams.toString()}`, {
+      signal: controller.signal,
+    });
+  } catch (err: any) {
+    clearTimeout(timeout);
+    if (err?.name === 'AbortError') {
+      throw new Error('Request timed out. Please check your connection and try again.');
+    }
+    throw err;
+  }
+  clearTimeout(timeout);
 
   if (response.status === 429) {
     if (retries < 3) {
@@ -291,7 +308,7 @@ async function tmdbFetch(endpoint: string, params: Record<string, string> = {}, 
   }
 
   if (!response.ok) {
-    throw new Error(`TMDB API error: ${response.statusText}`);
+    throw new Error(`TMDB API error: ${response.status} ${response.statusText}`);
   }
 
   return response.json();

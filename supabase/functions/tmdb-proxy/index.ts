@@ -91,6 +91,13 @@ Deno.serve(async (req: Request) => {
       tmdbResponse = await fetch(tmdbUrl, {
         method: "GET",
         signal: controller.signal,
+        headers: {
+          "Accept": "application/json",
+          // Force uncompressed bytes — Deno's auto-decompression of gzip TMDB
+          // responses was throwing inside .text() for specific endpoints
+          // (e.g. /tv/72071, /movie/655322) and surfacing as fast 500s.
+          "Accept-Encoding": "identity",
+        },
       });
       clearTimeout(fetchTimeout);
     } catch (fetchErr: any) {
@@ -113,10 +120,15 @@ Deno.serve(async (req: Request) => {
       status: tmdbResponse.status,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (error) {
-    console.error("Edge function error:", error);
+  } catch (error: any) {
+    console.error("Edge function error:", {
+      name: error?.name,
+      message: error?.message,
+      stack: error?.stack,
+      endpoint: new URL(req.url).searchParams.get("endpoint"),
+    });
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: error?.message ?? "Unknown error" }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
