@@ -15,6 +15,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { queryKeys } from '../lib/queryKeys';
 import { useScrollRestoration } from '../hooks/useScrollRestoration';
+import { PushOptInBanner } from '../components/notifications/PushOptInBanner';
 import type { Movie, TVShow, TVShowDetails } from '../services/tmdb';
 
 interface WatchlistItem {
@@ -324,6 +325,9 @@ export default function Dashboard() {
   return (
     <Layout>
       <div className="space-y-8">
+
+        {/* Push notification opt-in banner — shown once to users who haven't enabled push yet */}
+        {user && <PushOptInBanner userId={user.id} />}
 
         {/* Currently Watching */}
         {(() => {
