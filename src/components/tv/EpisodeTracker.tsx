@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { tmdbService } from '../../services/tmdb';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
+import { pushNotificationService } from '../../services/pushNotificationService';
 import type { Season } from '../../services/tmdb';
 import type { Database } from '../../types/database.types';
 
@@ -37,6 +38,7 @@ export function EpisodeTracker({ tvId, numberOfSeasons, seasons, showStatus, onA
   const [markingSeason, setMarkingSeason] = useState(false);
   const [autoFilling, setAutoFilling] = useState(false);
   const [nextEpisodeCountdown, setNextEpisodeCountdown] = useState<string>('');
+  const [setReminderIds, setSetReminderIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     localStorage.setItem('episodeTracker.autoMark', String(autoMarkEnabled));
@@ -46,6 +48,21 @@ export function EpisodeTracker({ tvId, numberOfSeasons, seasons, showStatus, onA
     loadSeasonData();
     loadBingeSession();
   }, [selectedSeason, tvId]);
+
+  // Load which episodes already have reminders set so the button shows "✓ Reminder set"
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from('episode_reminders')
+      .select('season_number,episode_number')
+      .eq('user_id', user.id)
+      .eq('tmdb_id', tvId)
+      .then(({ data }) => {
+        if (data) {
+          setSetReminderIds(new Set(data.map(r => `${r.season_number}-${r.episode_number}`)));
+        }
+      });
+  }, [user, tvId]);
 
   useEffect(() => {
     if (seasonDetails) {
@@ -279,18 +296,53 @@ export function EpisodeTracker({ tvId, numberOfSeasons, seasons, showStatus, onA
     if (!user) return;
 
     try {
-      await supabase
+      // Check if reminder already set (avoid duplicate DB rows)
+      const { data: existing } = await supabase
         .from('episode_reminders')
-        .insert([{
-          user_id: user.id,
-          tmdb_id: tvId,
-          season_number: seasonNumber,
-          episode_number: episodeNumber,
-          air_date: airDate,
-          is_season_finale: true,
-        }]);
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('tmdb_id', tvId)
+        .eq('season_number', seasonNumber)
+        .eq('episode_number', episodeNumber)
+        .maybeSingle();
 
-      toast.success('Season finale reminder set!');
+      if (!existing) {
+        const { error } = await supabase
+          .from('episode_reminders')
+          .insert([{
+            user_id: user.id,
+            tmdb_id: tvId,
+            season_number: seasonNumber,
+            episode_number: episodeNumber,
+            air_date: airDate,
+            is_season_finale: true,
+          }]);
+        if (error) throw error;
+      }
+
+      // Attempt to enable push notifications if not already subscribed
+      if (!pushNotificationService.isSupported()) {
+        toast.success('Reminder saved — check your Notifications tab on air day.');
+        return;
+      }
+
+      const alreadySubscribed = await pushNotificationService.isSubscribed();
+      if (alreadySubscribed) {
+        const formatted = new Date(airDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        toast.success(`You'll get a push notification on ${formatted}.`);
+        return;
+      }
+
+      // Not yet subscribed — request permission now
+      const result = await pushNotificationService.subscribe(user.id);
+      if (result === 'granted') {
+        const formatted = new Date(airDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        toast.success(`Push notifications enabled! Alert coming on ${formatted}.`);
+      } else if (result === 'denied') {
+        toast.info("Reminder saved — enable notifications in your browser settings to get a push alert.");
+      } else {
+        toast.success('Reminder saved — check your Notifications tab on air day.');
+      }
     } catch (error) {
       console.error('Error setting reminder:', error);
       toast.error('Failed to set reminder');
@@ -529,18 +581,28 @@ export function EpisodeTracker({ tvId, numberOfSeasons, seasons, showStatus, onA
                     </p>
                   )}
                   {isFinale && episode.air_date && isUpcoming && !watched && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSeasonFinaleReminder(selectedSeason, episode.episode_number, episode.air_date);
-                      }}
-                      className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1 transition-colors"
-                    >
-                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                      </svg>
-                      Set Reminder
-                    </button>
+                    setReminderIds.has(`${selectedSeason}-${episode.episode_number}`) ? (
+                      <span className="text-xs text-green-400 flex items-center gap-1">
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        Reminder set
+                      </span>
+                    ) : (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSeasonFinaleReminder(selectedSeason, episode.episode_number, episode.air_date);
+                          setSetReminderIds(prev => new Set([...prev, `${selectedSeason}-${episode.episode_number}`]));
+                        }}
+                        className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1 transition-colors"
+                      >
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                        </svg>
+                        Set Reminder
+                      </button>
+                    )
                   )}
                 </div>
               </div>

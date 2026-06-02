@@ -5,6 +5,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import ChangePassword from '../components/profile/ChangePassword';
 import { userSettingsService } from '../services/userSettings';
+import { pushNotificationService } from '../services/pushNotificationService';
+import { useToast } from '../contexts/ToastContext';
 
 const AVAILABLE_GENRES = [
   { id: 28,    name: 'Action' },
@@ -27,6 +29,7 @@ const AVAILABLE_GENRES = [
 
 export default function ProfilePage() {
   const { user, profile, updateProfile, signOut } = useAuth();
+  const toast = useToast();
   const [isEditing, setIsEditing] = useState(false);
   const [username, setUsername] = useState(profile?.username || '');
   const [bio, setBio] = useState(profile?.bio || '');
@@ -49,6 +52,11 @@ export default function ProfilePage() {
   const [hiatusHideWeeks, setHiatusHideWeeks] = useState(3);
   const [hiatusShowDays, setHiatusShowDays] = useState(14);
 
+  // Push notification state
+  const pushSupported = pushNotificationService.isSupported();
+  const [pushSubscribed, setPushSubscribed] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
+
   useEffect(() => {
     userSettingsService.getEnglishOnlyFilter().then(setEnglishOnly);
     userSettingsService.getPreferredGenres().then(setPreferredGenres);
@@ -56,7 +64,41 @@ export default function ProfilePage() {
       setHiatusHideWeeks(hideWeeks);
       setHiatusShowDays(showDays);
     });
+    // Check current push subscription status
+    if (pushNotificationService.isSupported()) {
+      pushNotificationService.isSubscribed().then(setPushSubscribed);
+    }
   }, []);
+
+  async function handleEnablePush() {
+    if (!user) return;
+    setPushLoading(true);
+    try {
+      const result = await pushNotificationService.subscribe(user.id);
+      if (result === 'granted') {
+        setPushSubscribed(true);
+        toast.success('Push notifications enabled! You\'ll receive alerts on this device.');
+      } else if (result === 'denied') {
+        toast.error('Permission denied — enable notifications in your browser or device settings.');
+      } else if (result === 'unsupported') {
+        toast.info('Push notifications are not supported on this browser. Install the app and try again.');
+      }
+    } finally {
+      setPushLoading(false);
+    }
+  }
+
+  async function handleDisablePush() {
+    if (!user) return;
+    setPushLoading(true);
+    try {
+      await pushNotificationService.unsubscribe(user.id);
+      setPushSubscribed(false);
+      toast.success('Push notifications disabled.');
+    } finally {
+      setPushLoading(false);
+    }
+  }
 
   // Deep-link from the onboarding tour: /profile#discovery-preferences
   useEffect(() => {
@@ -459,6 +501,55 @@ export default function ProfilePage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </Link>
+          </div>
+
+          {/* Push Notifications */}
+          <div className="bg-gray-800 rounded-lg p-6">
+            <h2 className="text-lg font-semibold text-white mb-1">Push Notifications</h2>
+            <p className="text-sm text-gray-400 mb-4">
+              Get alerts on this device for new episodes, season finales, recommendations, and more.
+            </p>
+
+            {!pushSupported ? (
+              <div className="flex items-start gap-3 p-3 bg-gray-700/50 rounded-lg">
+                <svg className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <div>
+                  <p className="text-sm text-white font-medium">Not available on this browser</p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    On iPhone: add RaineyFlixs to your Home Screen, then open it as an app (requires iOS 16.4+).
+                    On Android: use Chrome or Edge.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className={`w-2.5 h-2.5 rounded-full ${pushSubscribed ? 'bg-green-400' : 'bg-gray-500'}`} />
+                  <span className="text-sm text-white">
+                    {pushSubscribed ? 'Enabled on this device' : 'Disabled'}
+                  </span>
+                </div>
+                {pushSubscribed ? (
+                  <button
+                    onClick={handleDisablePush}
+                    disabled={pushLoading}
+                    className="px-4 py-1.5 text-sm bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    {pushLoading ? 'Disabling…' : 'Disable'}
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleEnablePush}
+                    disabled={pushLoading}
+                    className="px-4 py-1.5 text-sm bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    {pushLoading ? 'Enabling…' : 'Enable'}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="bg-gray-800 rounded-lg p-6">

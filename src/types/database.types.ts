@@ -416,6 +416,67 @@ export interface Database {
           computed_at?: string
         }
       }
+      notifications: {
+        Row: {
+          id: string
+          user_id: string
+          notification_type: 'recommendation' | 'plex_request_update' | 'permission_granted' | 'permission_revoked' | 'upcoming_episode' | 'season_finale' | 'series_returning'
+          title: string
+          message: string
+          is_read: boolean
+          dedup_key: string | null
+          metadata: Json | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          notification_type: 'recommendation' | 'plex_request_update' | 'permission_granted' | 'permission_revoked' | 'upcoming_episode' | 'season_finale' | 'series_returning'
+          title: string
+          message: string
+          is_read?: boolean
+          dedup_key?: string | null
+          metadata?: Json | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          notification_type?: 'recommendation' | 'plex_request_update' | 'permission_granted' | 'permission_revoked' | 'upcoming_episode' | 'season_finale' | 'series_returning'
+          title?: string
+          message?: string
+          is_read?: boolean
+          dedup_key?: string | null
+          metadata?: Json | null
+          created_at?: string
+        }
+      }
+      push_subscriptions: {
+        Row: {
+          id: string
+          user_id: string
+          endpoint: string
+          p256dh: string
+          auth: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          endpoint: string
+          p256dh: string
+          auth: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          endpoint?: string
+          p256dh?: string
+          auth?: string
+          created_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never
