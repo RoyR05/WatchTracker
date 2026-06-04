@@ -35,31 +35,45 @@ function removeArticles(s: string): string {
   return s.replace(/^(the|a|an)\s+/, "");
 }
 
-function titleWords(title: string): string[] {
-  return removeArticles(normalize(title)).split(" ").filter(Boolean);
+/** Remove trailing edition info from Plex result titles before matching.
+ *  "The Dark Knight (Director's Cut)" → "The Dark Knight"
+ *  Does NOT strip year parens — those are handled by the year filter.
+ */
+function stripEditionInfo(title: string): string {
+  return title
+    .replace(/\s*\((director'?s cut|extended|unrated|theatrical|special edition|remastered|anniversary edition|collector'?s edition|ultimate edition|bonus features?|bonus disc|bonus content)\)\s*$/i, "")
+    .trim();
+}
+
+function computeF1(normA: string, normB: string): number {
+  const wordsA = normA.split(" ").filter(Boolean);
+  const wordsB = normB.split(" ").filter(Boolean);
+  if (wordsA.length === 0 || wordsB.length === 0) return 0;
+  const setA = new Set(wordsA);
+  const setB = new Set(wordsB);
+  let matchCount = 0;
+  for (const w of setA) {
+    if (setB.has(w)) matchCount++;
+  }
+  const precision = matchCount / setA.size;
+  const recall = matchCount / setB.size;
+  if (precision === 0 && recall === 0) return 0;
+  return (2 * precision * recall) / (precision + recall);
 }
 
 function titleSimilarity(searchTitle: string, resultTitle: string): number {
+  const cleanedResult = stripEditionInfo(resultTitle);
   const normSearch = removeArticles(normalize(searchTitle));
   const normResult = removeArticles(normalize(resultTitle));
+  const normClean = removeArticles(normalize(cleanedResult));
 
-  if (normSearch === normResult) return 1.0;
+  if (normSearch === normResult || normSearch === normClean) return 1.0;
 
-  const searchWords = normSearch.split(" ").filter(Boolean);
-  const resultWords = normResult.split(" ").filter(Boolean);
-  if (searchWords.length === 0 || resultWords.length === 0) return 0;
-
-  const searchSet = new Set(searchWords);
-  const resultSet = new Set(resultWords);
-  let matchCount = 0;
-  for (const w of searchSet) {
-    if (resultSet.has(w)) matchCount++;
-  }
-
-  const precision = matchCount / searchSet.size;
-  const recall = matchCount / resultSet.size;
-  if (precision === 0 && recall === 0) return 0;
-  return (2 * precision * recall) / (precision + recall);
+  // Try both with and without edition info stripped from the result; take the best
+  return Math.max(
+    computeF1(normSearch, normResult),
+    computeF1(normSearch, normClean),
+  );
 }
 
 interface ServerInfo {
@@ -188,7 +202,9 @@ function findBestMatch(
     const score = titleSimilarity(searchTitle, itemTitle);
     if (score < 0.6) continue;
 
-    const yearMatch = !year || !itemYear || itemYear === year;
+    // Allow ±1 year — theatrical year (TMDB) can differ from streaming release year (Plex catalog)
+    const yearMatch = !year || !itemYear ||
+      Math.abs(parseInt(itemYear, 10) - parseInt(year, 10)) <= 1;
     if (!yearMatch && score < 0.95) continue;
 
     if (!best || score > best.score) {
@@ -207,6 +223,93 @@ function findBestMatch(
     }
   }
   return best;
+}
+
+// --- SECTION SEARCH (extracted so it can run in parallel with hub search) ---
+async function runSectionSearch(
+  title: string,
+  year: string | null,
+  mediaType: string | null,
+  servers: ServerInfo[],
+  config: Record<string, unknown> | null
+): Promise<ReturnType<typeof findBestMatch>> {
+  const cachedSections = mediaType === "tv" ? config?.auto_tv_section_id : config?.auto_movie_section_id;
+  if (!cachedSections) return null;
+  try {
+    const sections = JSON.parse(cachedSections as string) as { server: string; id: string }[];
+    const results = await Promise.allSettled(
+      sections.map(async (sec) => {
+        const server = servers.find((s) => s.name === sec.server);
+        if (!server) return null;
+        const path = `/library/sections/${sec.id}/all?title=${encodeURIComponent(title)}`;
+        const data = await plexFetch(server.uri, path, server.accessToken) as
+          { MediaContainer?: { Metadata?: Array<Record<string, unknown>> } } | null;
+        if (!data) return null;
+        return findBestMatch(data?.MediaContainer?.Metadata ?? [], title, year, mediaType, server);
+      })
+    );
+    let best: ReturnType<typeof findBestMatch> = null;
+    for (const r of results) {
+      if (r.status === "fulfilled" && r.value) {
+        if (!best || r.value.score > best.score) best = r.value;
+      }
+    }
+    return best;
+  } catch { return null; }
+}
+
+// --- PLEX DISCOVER SEARCH — queries Plex's cloud streaming catalog ---
+// Covers content available via Plex's free FAST tier and partner streaming services
+// that are never in the local Plex server library.
+async function searchPlexDiscover(
+  title: string,
+  year: string | null,
+  mediaType: string | null,
+  plexToken: string
+): Promise<{ title: string; year: number | null } | null> {
+  try {
+    // type=1 = movies, type=2 = shows in Plex's discover API
+    const typeParam = mediaType === "movie" ? "&type=1" : mediaType === "tv" ? "&type=2" : "";
+    const url = `https://discover.provider.plex.tv/library/search?query=${encodeURIComponent(title)}&limit=10${typeParam}&X-Plex-Token=${plexToken}&X-Plex-Client-Identifier=${PLEX_CLIENT_ID}&X-Plex-Platform=Web`;
+
+    const res = await fetch(url, {
+      headers: { Accept: "application/json" },
+      signal: AbortSignal.timeout(6000),
+    });
+
+    if (!res.ok) {
+      console.log("[Discover] HTTP", res.status, "for:", title);
+      return null;
+    }
+
+    const data = await res.json() as { MediaContainer?: { Metadata?: Array<Record<string, unknown>> } };
+    const items = data?.MediaContainer?.Metadata ?? [];
+    console.log("[Discover]", items.length, "results for:", title,
+      "| keys:", items[0] ? Object.keys(items[0]).slice(0, 8).join(",") : "none");
+
+    for (const item of items) {
+      const itemTitle = (item.title as string) ?? "";
+      const itemYear = item.year ? String(item.year) : null;
+      const itemType = item.type as string;
+
+      if (mediaType === "movie" && itemType && itemType !== "movie") continue;
+      if (mediaType === "tv" && itemType && itemType !== "show" && itemType !== "season" && itemType !== "episode") continue;
+
+      const score = titleSimilarity(title, itemTitle);
+      if (score < 0.6) continue;
+
+      const yearMatch = !year || !itemYear ||
+        Math.abs(parseInt(itemYear, 10) - parseInt(year, 10)) <= 1;
+      if (!yearMatch && score < 0.95) continue;
+
+      console.log("[Discover] Match:", itemTitle, itemYear, "score:", score.toFixed(2));
+      return { title: itemTitle, year: item.year as number | null };
+    }
+    return null;
+  } catch (err) {
+    console.error("[Discover] Error:", err);
+    return null;
+  }
 }
 
 Deno.serve(async (req: Request) => {
@@ -306,77 +409,78 @@ Deno.serve(async (req: Request) => {
         return jsonResponse({ available: false, serversSearched: 0, error: err.message }, 200);
       }
 
-      // Search all servers in parallel using /hubs/search (the correct Plex search endpoint)
-      const results = await Promise.allSettled(
-        servers.map(async (server) => {
-          const path = `/hubs/search?query=${encodeURIComponent(title)}&includeCollections=0&includeExternalMedia=1`;
-          const data = await plexFetch(server.uri, path, server.accessToken, 8000) as { MediaContainer?: { Hub?: Array<{ type: string; Metadata?: Array<Record<string, unknown>> }> } } | null;
-          if (!data) return null;
-
-          // Extract items from all hubs
-          const hubs = data?.MediaContainer?.Hub || [];
-          const allItems: Array<Record<string, unknown>> = [];
-          for (const hub of hubs) {
-            if (hub.Metadata) {
-              allItems.push(...hub.Metadata);
+      // Run hub search, section search, and Plex Discover cloud search ALL in parallel.
+      // Previously: hub (8s timeout) → THEN section search → THEN nothing.
+      // Now: all three start simultaneously; fastest positive result wins.
+      //   • Hub search: 4s timeout (was 8s — it consistently times out anyway, so fail fast)
+      //   • Section search: typically 0.1–0.5s (direct library lookup, already fast)
+      //   • Discover search: 1–3s (Plex cloud API for streaming-only content)
+      const [hubBest, sectionBest, discoverMatch] = await Promise.all([
+        // 1. Hub search across all servers (shorter timeout to fail fast)
+        Promise.allSettled(
+          servers.map(async (server) => {
+            const path = `/hubs/search?query=${encodeURIComponent(title)}&includeCollections=0&includeExternalMedia=0`;
+            const data = await plexFetch(server.uri, path, server.accessToken, 4000) as
+              { MediaContainer?: { Hub?: Array<{ Metadata?: Array<Record<string, unknown>> }> } } | null;
+            if (!data) return null;
+            const allItems: Array<Record<string, unknown>> = [];
+            for (const hub of data?.MediaContainer?.Hub ?? []) {
+              if (hub.Metadata) allItems.push(...hub.Metadata);
+            }
+            return findBestMatch(allItems, title, year, mediaType, server);
+          })
+        ).then((results) => {
+          let best: ReturnType<typeof findBestMatch> = null;
+          for (const r of results) {
+            if (r.status === "fulfilled" && r.value) {
+              if (!best || r.value.score > best.score) best = r.value;
             }
           }
-          return findBestMatch(allItems, title, year, mediaType, server);
-        })
-      );
+          return best;
+        }),
+        // 2. Section search — runs concurrently, fast if sections are configured
+        runSectionSearch(title, year, mediaType, servers, config),
+        // 3. Plex Discover — cloud streaming catalog (covers FAST/partner streaming content)
+        searchPlexDiscover(title, year, mediaType, plexToken),
+      ]);
 
-      // Find best across all servers
-      let overallBest: { title: string; year: number | null; quality: string | null; server: string; score: number; ratingKey: string; serverUri: string; serverMachineId: string } | null = null;
-      for (const r of results) {
-        if (r.status === "fulfilled" && r.value) {
-          if (!overallBest || r.value.score > overallBest.score) {
-            overallBest = r.value;
-          }
-        }
-      }
+      // Best local result (hub or section)
+      type LocalBest = { title: string; year: number | null; quality: string | null; server: string; score: number; ratingKey: string; serverUri: string; serverMachineId: string };
+      const localBest = ([hubBest, sectionBest] as Array<LocalBest | null>)
+        .filter((x): x is LocalBest => x !== null)
+        .reduce<LocalBest | null>((a, b) => (!a || b.score > a.score) ? b : a, null);
 
-      if (overallBest) {
+      if (localBest) {
         return jsonResponse({
           available: true,
-          match: { title: overallBest.title, year: overallBest.year, quality: overallBest.quality, server: overallBest.server, ratingKey: overallBest.ratingKey, serverUri: overallBest.serverUri, serverMachineId: overallBest.serverMachineId },
+          match: {
+            title: localBest.title,
+            year: localBest.year,
+            quality: localBest.quality,
+            server: localBest.server,
+            ratingKey: localBest.ratingKey,
+            serverUri: localBest.serverUri,
+            serverMachineId: localBest.serverMachineId,
+          },
           serversSearched: servers.length,
         });
       }
 
-      // If global search failed, try section-specific search as fallback
-      // Only do this if we have cached section info (don't detect on the fly)
-      const cachedSections = mediaType === "tv" ? config?.auto_tv_section_id : config?.auto_movie_section_id;
-      if (cachedSections) {
-        try {
-          const sections = JSON.parse(cachedSections as string) as { server: string; id: string }[];
-          const sectionResults = await Promise.allSettled(
-            sections.map(async (sec) => {
-              const server = servers.find((s) => s.name === sec.server);
-              if (!server) return null;
-              const path = `/library/sections/${sec.id}/all?title=${encodeURIComponent(title)}`;
-              const data = await plexFetch(server.uri, path, server.accessToken) as { MediaContainer?: { Metadata?: Array<Record<string, unknown>> } } | null;
-              if (!data) return null;
-              const items = data?.MediaContainer?.Metadata || [];
-              return findBestMatch(items, title, year, mediaType, server);
-            })
-          );
-
-          for (const r of sectionResults) {
-            if (r.status === "fulfilled" && r.value) {
-              if (!overallBest || r.value.score > overallBest.score) {
-                overallBest = r.value;
-              }
-            }
-          }
-
-          if (overallBest) {
-            return jsonResponse({
-              available: true,
-              match: { title: overallBest.title, year: overallBest.year, quality: overallBest.quality, server: overallBest.server, ratingKey: overallBest.ratingKey, serverUri: overallBest.serverUri, serverMachineId: overallBest.serverMachineId },
-              serversSearched: servers.length,
-            });
-          }
-        } catch { /* ignore parse errors */ }
+      // Local not found — check Plex's cloud streaming catalog result
+      if (discoverMatch) {
+        return jsonResponse({
+          available: true,
+          match: {
+            title: discoverMatch.title,
+            year: discoverMatch.year,
+            quality: null,            // streaming content has no local resolution info
+            server: "Plex Streaming",
+            ratingKey: "",
+            serverUri: "",
+            serverMachineId: "",
+          },
+          serversSearched: servers.length,
+        });
       }
 
       return jsonResponse({ available: false, match: null, serversSearched: servers.length });
