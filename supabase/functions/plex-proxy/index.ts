@@ -237,16 +237,17 @@ async function runSectionSearch(
 ): Promise<ReturnType<typeof findBestMatch>> {
   const cachedSections = mediaType === "tv" ? config?.auto_tv_section_id : config?.auto_movie_section_id;
 
-  // Build search tasks: for each configured section entry, search it on EVERY server
-  // that matches the stored server name (not just the first — there may be multiple
-  // servers with the same name, e.g. two "RRFlix" connections with different URIs).
   const tasks: Array<() => Promise<ReturnType<typeof findBestMatch>>> = [];
+
+  // Track which server names have explicit section config so we can full-scan the rest.
+  const configuredServerNames = new Set<string>();
 
   if (cachedSections) {
     try {
       const sections = JSON.parse(cachedSections as string) as { server: string; id: string }[];
       for (const sec of sections) {
-        // Find ALL servers with this name, not just the first
+        configuredServerNames.add(sec.server);
+        // Use filter (not find) — multiple servers can share a name (e.g. two "RRFlix" URIs)
         const matchingServers = servers.filter((s) => s.name === sec.server);
         for (const server of matchingServers) {
           const s = server;
@@ -257,40 +258,39 @@ async function runSectionSearch(
               { MediaContainer?: { Metadata?: Array<Record<string, unknown>> } } | null;
             if (!data) return null;
             const items = data?.MediaContainer?.Metadata ?? [];
-            console.log(`[Section] Server=${s.name} section=${sId} returned ${items.length} items for: ${title}`);
+            console.log(`[Section] Server=${s.name} uri=${s.uri.slice(0, 30)} section=${sId} items=${items.length} for: ${title}`);
             return findBestMatch(items, title, year, mediaType, s);
           });
         }
       }
-    } catch { /* ignore parse error, fall through to full scan */ }
+    } catch { /* ignore parse error */ }
   }
 
-  // If no tasks built (sections not configured or parse failed), scan ALL sections
-  // on ALL servers — slightly slower but catches servers not in the config.
-  if (tasks.length === 0) {
-    for (const server of servers) {
-      const s = server;
-      tasks.push(async () => {
-        const sectionsData = await plexFetch(s.uri, "/library/sections", s.accessToken) as
-          { MediaContainer?: { Directory?: Array<{ key: string; type: string }> } } | null;
-        if (!sectionsData) return null;
-        const dirs = sectionsData?.MediaContainer?.Directory ?? [];
-        const sectionType = mediaType === "tv" ? "show" : "movie";
-        const matchingSections = dirs.filter((d) => d.type === sectionType);
-        let best: ReturnType<typeof findBestMatch> = null;
-        for (const sec of matchingSections) {
-          const path = `/library/sections/${sec.key}/all?title=${encodeURIComponent(title)}`;
-          const data = await plexFetch(s.uri, path, s.accessToken) as
-            { MediaContainer?: { Metadata?: Array<Record<string, unknown>> } } | null;
-          if (!data) continue;
-          const items = data?.MediaContainer?.Metadata ?? [];
-          console.log(`[Section fallback] Server=${s.name} section=${sec.key} returned ${items.length} items for: ${title}`);
-          const match = findBestMatch(items, title, year, mediaType, s);
-          if (match && (!best || match.score > best.score)) best = match;
-        }
-        return best;
-      });
-    }
+  // For every server NOT covered by the section config (e.g. Chudzflix when only
+  // RRFlix is configured), do a full section scan so nothing is silently skipped.
+  const uncoveredServers = servers.filter((s) => !configuredServerNames.has(s.name));
+  for (const server of uncoveredServers) {
+    const s = server;
+    tasks.push(async () => {
+      const sectionsData = await plexFetch(s.uri, "/library/sections", s.accessToken) as
+        { MediaContainer?: { Directory?: Array<{ key: string; type: string }> } } | null;
+      if (!sectionsData) return null;
+      const dirs = sectionsData?.MediaContainer?.Directory ?? [];
+      const sectionType = mediaType === "tv" ? "show" : "movie";
+      const matchingSections = dirs.filter((d) => d.type === sectionType);
+      let best: ReturnType<typeof findBestMatch> = null;
+      for (const sec of matchingSections) {
+        const path = `/library/sections/${sec.key}/all?title=${encodeURIComponent(title)}`;
+        const data = await plexFetch(s.uri, path, s.accessToken) as
+          { MediaContainer?: { Metadata?: Array<Record<string, unknown>> } } | null;
+        if (!data) continue;
+        const items = data?.MediaContainer?.Metadata ?? [];
+        console.log(`[Section scan] Server=${s.name} section=${sec.key} items=${items.length} for: ${title}`);
+        const match = findBestMatch(items, title, year, mediaType, s);
+        if (match && (!best || match.score > best.score)) best = match;
+      }
+      return best;
+    });
   }
 
   if (tasks.length === 0) return null;
