@@ -309,7 +309,7 @@ Deno.serve(async (req: Request) => {
       // Search all servers in parallel using /hubs/search (the correct Plex search endpoint)
       const results = await Promise.allSettled(
         servers.map(async (server) => {
-          const path = `/hubs/search?query=${encodeURIComponent(title)}&includeCollections=0&includeExternalMedia=0`;
+          const path = `/hubs/search?query=${encodeURIComponent(title)}&includeCollections=0&includeExternalMedia=1`;
           const data = await plexFetch(server.uri, path, server.accessToken, 8000) as { MediaContainer?: { Hub?: Array<{ type: string; Metadata?: Array<Record<string, unknown>> }> } } | null;
           if (!data) return null;
 
