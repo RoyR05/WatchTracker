@@ -226,6 +226,8 @@ function findBestMatch(
 }
 
 // --- SECTION SEARCH (extracted so it can run in parallel with hub search) ---
+// Searches all configured sections across ALL matching servers (not just the first).
+// Falls back to scanning every section on every server if configured sections miss.
 async function runSectionSearch(
   title: string,
   year: string | null,
@@ -234,20 +236,67 @@ async function runSectionSearch(
   config: Record<string, unknown> | null
 ): Promise<ReturnType<typeof findBestMatch>> {
   const cachedSections = mediaType === "tv" ? config?.auto_tv_section_id : config?.auto_movie_section_id;
-  if (!cachedSections) return null;
+
+  // Build search tasks: for each configured section entry, search it on EVERY server
+  // that matches the stored server name (not just the first — there may be multiple
+  // servers with the same name, e.g. two "RRFlix" connections with different URIs).
+  const tasks: Array<() => Promise<ReturnType<typeof findBestMatch>>> = [];
+
+  if (cachedSections) {
+    try {
+      const sections = JSON.parse(cachedSections as string) as { server: string; id: string }[];
+      for (const sec of sections) {
+        // Find ALL servers with this name, not just the first
+        const matchingServers = servers.filter((s) => s.name === sec.server);
+        for (const server of matchingServers) {
+          const s = server;
+          const sId = sec.id;
+          tasks.push(async () => {
+            const path = `/library/sections/${sId}/all?title=${encodeURIComponent(title)}`;
+            const data = await plexFetch(s.uri, path, s.accessToken) as
+              { MediaContainer?: { Metadata?: Array<Record<string, unknown>> } } | null;
+            if (!data) return null;
+            const items = data?.MediaContainer?.Metadata ?? [];
+            console.log(`[Section] Server=${s.name} section=${sId} returned ${items.length} items for: ${title}`);
+            return findBestMatch(items, title, year, mediaType, s);
+          });
+        }
+      }
+    } catch { /* ignore parse error, fall through to full scan */ }
+  }
+
+  // If no tasks built (sections not configured or parse failed), scan ALL sections
+  // on ALL servers — slightly slower but catches servers not in the config.
+  if (tasks.length === 0) {
+    for (const server of servers) {
+      const s = server;
+      tasks.push(async () => {
+        const sectionsData = await plexFetch(s.uri, "/library/sections", s.accessToken) as
+          { MediaContainer?: { Directory?: Array<{ key: string; type: string }> } } | null;
+        if (!sectionsData) return null;
+        const dirs = sectionsData?.MediaContainer?.Directory ?? [];
+        const sectionType = mediaType === "tv" ? "show" : "movie";
+        const matchingSections = dirs.filter((d) => d.type === sectionType);
+        let best: ReturnType<typeof findBestMatch> = null;
+        for (const sec of matchingSections) {
+          const path = `/library/sections/${sec.key}/all?title=${encodeURIComponent(title)}`;
+          const data = await plexFetch(s.uri, path, s.accessToken) as
+            { MediaContainer?: { Metadata?: Array<Record<string, unknown>> } } | null;
+          if (!data) continue;
+          const items = data?.MediaContainer?.Metadata ?? [];
+          console.log(`[Section fallback] Server=${s.name} section=${sec.key} returned ${items.length} items for: ${title}`);
+          const match = findBestMatch(items, title, year, mediaType, s);
+          if (match && (!best || match.score > best.score)) best = match;
+        }
+        return best;
+      });
+    }
+  }
+
+  if (tasks.length === 0) return null;
+
   try {
-    const sections = JSON.parse(cachedSections as string) as { server: string; id: string }[];
-    const results = await Promise.allSettled(
-      sections.map(async (sec) => {
-        const server = servers.find((s) => s.name === sec.server);
-        if (!server) return null;
-        const path = `/library/sections/${sec.id}/all?title=${encodeURIComponent(title)}`;
-        const data = await plexFetch(server.uri, path, server.accessToken) as
-          { MediaContainer?: { Metadata?: Array<Record<string, unknown>> } } | null;
-        if (!data) return null;
-        return findBestMatch(data?.MediaContainer?.Metadata ?? [], title, year, mediaType, server);
-      })
-    );
+    const results = await Promise.allSettled(tasks.map((t) => t()));
     let best: ReturnType<typeof findBestMatch> = null;
     for (const r of results) {
       if (r.status === "fulfilled" && r.value) {
