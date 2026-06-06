@@ -225,6 +225,16 @@ function findBestMatch(
   return best;
 }
 
+/** Resolve if the value is non-null; reject otherwise.
+ *  Lets Promise.any treat null results as "no match found" (i.e. keep racing).
+ */
+function ifFound<T>(p: Promise<T | null>): Promise<T> {
+  return p.then((v) => {
+    if (v === null) throw null;
+    return v;
+  });
+}
+
 // --- SECTION SEARCH (extracted so it can run in parallel with hub search) ---
 // Searches all configured sections across ALL matching servers (not just the first).
 // Falls back to scanning every section on every server if configured sections miss.
@@ -296,15 +306,15 @@ async function runSectionSearch(
   if (tasks.length === 0) return null;
 
   try {
-    const results = await Promise.allSettled(tasks.map((t) => t()));
-    let best: ReturnType<typeof findBestMatch> = null;
-    for (const r of results) {
-      if (r.status === "fulfilled" && r.value) {
-        if (!best || r.value.score > best.score) best = r.value;
-      }
-    }
-    return best;
-  } catch { return null; }
+    // Race all section tasks — return as soon as any finds a match.
+    // Avoids waiting for slow/unreachable sections when a faster one already matched.
+    // ifFound() is a hoisted function declaration, accessible here even though it
+    // appears later in the file.
+    return await Promise.any(tasks.map((t) => ifFound(t())));
+  } catch {
+    // AggregateError: all tasks returned null or threw — no match in any section
+    return null;
+  }
 }
 
 // --- PLEX DISCOVER SEARCH — queries Plex's cloud streaming catalog ---
@@ -359,16 +369,6 @@ async function searchPlexDiscover(
     console.error("[Discover] Error:", err);
     return null;
   }
-}
-
-/** Resolve if the value is non-null; reject otherwise.
- *  Lets Promise.any treat null results as "no match found" (i.e. keep racing).
- */
-function ifFound<T>(p: Promise<T | null>): Promise<T> {
-  return p.then((v) => {
-    if (v === null) throw null;
-    return v;
-  });
 }
 
 Deno.serve(async (req: Request) => {
