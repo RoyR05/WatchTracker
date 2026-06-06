@@ -17,37 +17,42 @@ const STEPS: Step[] = [
   {
     icon: '🎬',
     title: 'Welcome to RaineyFlixs',
-    body: 'Your personal place to track movies & TV, discover what to watch next, and share picks with friends. Here is the 30-second tour.',
+    body: 'Your personal place to track movies & TV, discover what to watch next, and stay on top of upcoming releases. Here is the quick tour — you can replay it any time from the ? Help menu.',
+  },
+  {
+    icon: '🏠',
+    title: 'Your Dashboard',
+    body: 'The home screen shows what you are Currently Watching, your Plan to Watch, Coming Soon titles, and trending/popular discovery rows. Tap ⚙ Customize (top-right) to reorder sections or hide the ones you do not need.',
   },
   {
     icon: '🔍',
-    title: 'Discover & Search',
-    body: 'Search movies, TV shows, and people. Browse the Discovery page for trending titles, mood picks, genres, and what is on each streaming service.',
+    title: 'Discover & Browse',
+    body: 'Find something new three ways: the Discover page offers Feeling Lucky, mood picks, and content from people you follow. The Browse page (grid icon in Discover) lets you filter by genre, streaming service, rating, and more.',
   },
   {
     icon: '✅',
     title: 'Track what you watch',
-    body: 'Add titles to your Watchlist (Watching, Plan to Watch, Completed, Dropped), tick off episodes, and see upcoming releases on the Calendar.',
+    body: 'Add any title to your Watchlist with four statuses — Watching, Plan to Watch, Completed, or Dropped. On TV shows, tap episodes to tick them off individually or use "Mark Season Watched" for a whole season at once.',
+  },
+  {
+    icon: '📅',
+    title: 'Plan to Watch — three buckets',
+    body: 'Your Plan to Watch list auto-sorts into Available Now, Coming Soon (future release date), and Announced (no date yet). When a Coming Soon title drops, you get a notification so nothing slips by.',
   },
   {
     icon: '👥',
     title: 'Follow people',
-    body: 'Follow actors, directors, and creators from any title or person page. Their new & upcoming work shows up in a row on Discovery.',
+    body: 'Follow actors, directors, and creators from any title page or person page. Their new and upcoming work appears in a dedicated row on the Discovery page — great for tracking a favourite director.',
   },
   {
     icon: '📨',
     title: 'Recommend & request',
-    body: 'Recommend titles to friends, and request anything missing from Plex right from a title page.',
-  },
-  {
-    icon: '👆',
-    title: 'Handy gestures (mobile)',
-    body: 'On a phone: swipe a card right to add to Plan to Watch, swipe left to mark Completed.',
+    body: 'Send a title recommendation to a friend directly from any detail page. If a title is missing from Plex, tap "Check Plex" then "Request it" — you will get a notification when it is added.',
   },
   {
     icon: '🎯',
-    title: 'Set up your taste',
-    body: 'Pick a few favorite genres in your Profile so Discovery and Feeling Lucky are tailored to you. It only takes a moment.',
+    title: 'Make it yours',
+    body: 'Head to Profile to pick your favourite genres — this personalises Feeling Lucky and Discovery results. While you are there, enable push notifications so episode and release alerts arrive even when the app is closed.',
   },
 ];
 

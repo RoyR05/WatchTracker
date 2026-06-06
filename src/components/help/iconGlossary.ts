@@ -49,7 +49,24 @@ export const ICON_GLOSSARY: IconEntry[] = [
     ],
   },
 
+  {
+    group: 'Header bar',
+    name: 'Customize Dashboard',
+    description: 'Opens the Dashboard customisation drawer — drag sections to reorder them or toggle the eye to show/hide individual sections.',
+    paths: [
+      'M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4',
+    ],
+  },
+
   // ── Bottom navigation ────────────────────────────────────────────
+  {
+    group: 'Bottom navigation',
+    name: 'Browse',
+    description: 'Advanced filtering — combine genre, streaming service, release year, and rating to find exactly what you want.',
+    paths: [
+      'M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z',
+    ],
+  },
   {
     group: 'Bottom navigation',
     name: 'Home',
@@ -117,6 +134,15 @@ export const ICON_GLOSSARY: IconEntry[] = [
     description: 'Thumbs down — hides this title from Trending, Anticipated, and Popular sections.',
     paths: [
       'M10 14H5.236a2 2 0 01-1.789-2.894l3.5-7A2 2 0 018.736 3h4.018a2 2 0 01.485.06l3.76.94m-7 10v5a2 2 0 002 2h.096c.5 0 .905-.405.905-.904 0-.715.211-1.413.608-2.008L17 13V4m-7 10h2m5-10h2a2 2 0 012 2v6a2 2 0 01-2 2h-2.5',
+    ],
+  },
+
+  {
+    group: 'On cards',
+    name: 'Section visibility (eye)',
+    description: 'In the Dashboard Customize drawer — eye open means the section is visible; eye-slash means it is hidden. Tap to toggle.',
+    paths: [
+      'M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z',
     ],
   },
 
