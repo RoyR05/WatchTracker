@@ -63,6 +63,7 @@ export interface Database {
           title: string | null
           poster_path: string | null
           media_year: number | null
+          release_date: string | null
           next_air_date: string | null
           last_air_date: string | null
           show_status: string | null
@@ -83,6 +84,7 @@ export interface Database {
           title?: string | null
           poster_path?: string | null
           media_year?: number | null
+          release_date?: string | null
           next_air_date?: string | null
           last_air_date?: string | null
           show_status?: string | null
@@ -103,6 +105,7 @@ export interface Database {
           title?: string | null
           poster_path?: string | null
           media_year?: number | null
+          release_date?: string | null
           next_air_date?: string | null
           last_air_date?: string | null
           show_status?: string | null
@@ -420,7 +423,7 @@ export interface Database {
         Row: {
           id: string
           user_id: string
-          notification_type: 'recommendation' | 'plex_request_update' | 'permission_granted' | 'permission_revoked' | 'upcoming_episode' | 'season_finale' | 'series_returning'
+          notification_type: 'recommendation' | 'plex_request_update' | 'permission_granted' | 'permission_revoked' | 'upcoming_episode' | 'season_finale' | 'series_returning' | 'release_available'
           title: string
           message: string
           is_read: boolean
@@ -431,7 +434,7 @@ export interface Database {
         Insert: {
           id?: string
           user_id: string
-          notification_type: 'recommendation' | 'plex_request_update' | 'permission_granted' | 'permission_revoked' | 'upcoming_episode' | 'season_finale' | 'series_returning'
+          notification_type: 'recommendation' | 'plex_request_update' | 'permission_granted' | 'permission_revoked' | 'upcoming_episode' | 'season_finale' | 'series_returning' | 'release_available'
           title: string
           message: string
           is_read?: boolean
@@ -442,7 +445,7 @@ export interface Database {
         Update: {
           id?: string
           user_id?: string
-          notification_type?: 'recommendation' | 'plex_request_update' | 'permission_granted' | 'permission_revoked' | 'upcoming_episode' | 'season_finale' | 'series_returning'
+          notification_type?: 'recommendation' | 'plex_request_update' | 'permission_granted' | 'permission_revoked' | 'upcoming_episode' | 'season_finale' | 'series_returning' | 'release_available'
           title?: string
           message?: string
           is_read?: boolean

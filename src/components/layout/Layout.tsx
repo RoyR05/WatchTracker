@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useAdmin } from '../../hooks/useAdmin';
 import { supabase } from '../../lib/supabase';
 import { checkUpcomingEpisodeNotifications } from '../../services/episodeNotifications';
+import { checkReleaseNotifications } from '../../services/releaseNotifications';
 import { OnboardingTour } from '../onboarding/OnboardingTour';
 import { HelpPanel } from '../help/HelpPanel';
 import { InstallPrompt } from '../pwa/InstallPrompt';
@@ -34,6 +35,7 @@ export function Layout({ children }: LayoutProps) {
       loadPendingCount();
       loadUnreadNotifications();
       checkUpcomingEpisodeNotifications(user.id); // fire-and-forget, once per day
+      checkReleaseNotifications(user.id); // fire-and-forget, once per day
 
       const recsChannel = supabase
         .channel('recommendations_changes')

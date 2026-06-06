@@ -16,6 +16,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { queryKeys } from '../lib/queryKeys';
 import { useScrollRestoration } from '../hooks/useScrollRestoration';
 import { PushOptInBanner } from '../components/notifications/PushOptInBanner';
+import { releasesLabel } from '../utils/releaseBucket';
 import type { Movie, TVShow, TVShowDetails } from '../services/tmdb';
 
 interface WatchlistItem {
@@ -26,6 +27,7 @@ interface WatchlistItem {
   title: string | null;
   poster_path: string | null;
   media_year: number | null;
+  release_date: string | null;
   next_air_date: string | null;
   last_air_date: string | null;
   show_status: string | null;
@@ -57,16 +59,19 @@ function isVisibleOnDashboard(item: WatchlistItem, hideWeeks: number, showDays: 
 }
 
 /** Pure display card — poster override supplied by Dashboard's sequential backfill. */
-function WatchlistCard({ item, statusLabel, badgeClass, posterOverride, showDays }: {
+function WatchlistCard({ item, statusLabel, badgeClass, posterOverride, showDays, showReleaseDate }: {
   item: WatchlistItem;
   statusLabel: string;
   badgeClass: string;
   posterOverride?: string | null;
   showDays: number;
+  showReleaseDate?: boolean;
 }) {
   const effectivePoster = posterOverride ?? item.poster_path;
 
   const returnsLabel = (() => {
+    // For "Coming Soon" cards, show the movie/series release date instead of the next-episode date.
+    if (showReleaseDate) return releasesLabel(item.release_date);
     if (!item.next_air_date) return null;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -214,13 +219,31 @@ export default function Dashboard() {
     staleTime: 60 * 1000,
   });
 
+  // Coming Soon — plan_to_watch titles whose release date is still in the future.
+  const { data: comingSoonItems = [] } = useQuery({
+    queryKey: queryKeys.watchlist(user?.id ?? '', 'coming_soon'),
+    queryFn: async () => {
+      const todayIso = new Date().toISOString().slice(0, 10);
+      const { data, error } = await supabase
+        .from('watchlist_items').select('*').eq('user_id', user!.id).eq('status', 'plan_to_watch')
+        .gt('release_date', todayIso)
+        .order('release_date', { ascending: true }).limit(20);
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled,
+    staleTime: 60 * 1000,
+  });
+
   // Sequential backfill — one TMDB request at a time so we never rate-limit.
   // Populates poster_path/title/media_year for all items, and additionally
   // next_air_date/last_air_date/show_status for TV shows (needed for hiatus hiding).
   useEffect(() => {
     const allItems = [...watchingItems, ...planToWatchItems] as WatchlistItem[];
     const toFetch = allItems.filter(
-      item => (!item.poster_path || (item.media_type === 'tv' && item.last_air_date === null))
+      item => (!item.poster_path
+          || item.release_date === null
+          || (item.media_type === 'tv' && item.last_air_date === null))
         && !backfilledIds.current.has(item.id)
     );
     if (toFetch.length === 0) return;
@@ -242,6 +265,7 @@ export default function Dashboard() {
           const fetchedTitle = 'title' in details ? details.title : (details as any).name;
           const date = 'release_date' in details ? details.release_date : (details as any).first_air_date;
           const mediaYear = date ? new Date(date).getFullYear() : null;
+          const releaseDate = date || null;
 
           const tvDetails = item.media_type === 'tv' ? (details as TVShowDetails) : null;
           const nextAirDate = tvDetails?.next_episode_to_air?.air_date ?? null;
@@ -258,6 +282,7 @@ export default function Dashboard() {
             poster_path: poster,
             title: fetchedTitle,
             media_year: mediaYear,
+            release_date: releaseDate,
             next_air_date: nextAirDate,
             last_air_date: lastAirDate,
             show_status: showStatus,
@@ -271,6 +296,7 @@ export default function Dashboard() {
       // Refresh query cache so navigating away and back loads from DB
       if (!cancelled) {
         queryClient.invalidateQueries({ queryKey: ['watchlist', user?.id] });
+        queryClient.invalidateQueries({ queryKey: ['watchlist-full', user?.id] });
       }
     }
 
@@ -393,6 +419,25 @@ export default function Dashboard() {
             </div>
           )}
         </CollapsibleSection>
+
+        {/* Coming Soon — upcoming watchlist titles with a future release date */}
+        {comingSoonItems.length > 0 && (
+          <CollapsibleSection id="coming-soon" title="Coming Soon" itemCount={comingSoonItems.length}>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+              {comingSoonItems.map(item => (
+                <WatchlistCard
+                  key={item.id}
+                  item={item as WatchlistItem}
+                  statusLabel="Coming Soon"
+                  badgeClass="bg-indigo-600"
+                  posterOverride={posterOverrides.get(item.id)}
+                  showDays={hiatusShowDays}
+                  showReleaseDate
+                />
+              ))}
+            </div>
+          </CollapsibleSection>
+        )}
 
         {/* Discovery Filters */}
         <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">

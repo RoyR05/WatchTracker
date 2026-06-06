@@ -2,9 +2,11 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Layout } from '../components/layout/Layout';
+import { CollapsibleSection } from '../components/ui/CollapsibleSection';
 import { tmdbService } from '../services/tmdb';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { releaseBucket, releasesLabel, type ReleaseBucket } from '../utils/releaseBucket';
 import type { Database } from '../types/database.types';
 
 type WatchlistItem = Database['public']['Tables']['watchlist_items']['Row'];
@@ -19,7 +21,15 @@ const STATUS_CONFIG: Record<WatchlistStatus, { label: string; color: string; dot
 
 const ALL_STATUSES: WatchlistStatus[] = ['watching', 'plan_to_watch', 'completed', 'dropped'];
 
-type SortKey = 'added' | 'title' | 'year';
+// Order + presentation of the three auto-split groups shown under "Plan to Watch".
+const BUCKET_ORDER: ReleaseBucket[] = ['available', 'coming_soon', 'announced'];
+const BUCKET_META: Record<ReleaseBucket, { id: string; title: string }> = {
+  available:   { id: 'plan-available',   title: 'Available Now' },
+  coming_soon: { id: 'plan-coming-soon', title: 'Coming Soon' },
+  announced:   { id: 'plan-announced',   title: 'Announced' },
+};
+
+type SortKey = 'added' | 'title' | 'year' | 'release';
 
 export default function WatchlistPage() {
   const { user } = useAuth();
@@ -49,19 +59,111 @@ export default function WatchlistPage() {
     return acc;
   }, {} as Record<WatchlistStatus, number>);
 
-  // Apply filters + sort
-  const visible = items
-    .filter(i => activeStatus === 'all' || i.status === activeStatus)
-    .filter(i => mediaFilter === 'all' || i.media_type === mediaFilter)
-    .filter(i => {
-      if (!search.trim()) return true;
-      return (i.title ?? '').toLowerCase().includes(search.toLowerCase());
-    })
-    .sort((a, b) => {
+  const sortItems = (arr: WatchlistItem[]) =>
+    [...arr].sort((a, b) => {
       if (sortKey === 'title') return (a.title ?? '').localeCompare(b.title ?? '');
       if (sortKey === 'year') return (b.media_year ?? 0) - (a.media_year ?? 0);
+      if (sortKey === 'release') {
+        // soonest first; items with no date sort last
+        const ax = a.release_date ? new Date(a.release_date).getTime() : Infinity;
+        const bx = b.release_date ? new Date(b.release_date).getTime() : Infinity;
+        return ax - bx;
+      }
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     });
+
+  // Apply media + search filters (status handled per-view below)
+  const matchesFilters = (i: WatchlistItem) =>
+    (mediaFilter === 'all' || i.media_type === mediaFilter) &&
+    (!search.trim() || (i.title ?? '').toLowerCase().includes(search.toLowerCase()));
+
+  // Flat list for All / Watching / Completed / Dropped
+  const visible = sortItems(
+    items.filter(i => (activeStatus === 'all' || i.status === activeStatus) && matchesFilters(i))
+  );
+
+  // Auto-split groups for the Plan to Watch tab
+  const planFiltered = items.filter(i => i.status === 'plan_to_watch' && matchesFilters(i));
+  const planGroups: Record<ReleaseBucket, WatchlistItem[]> = {
+    available: [], coming_soon: [], announced: [],
+  };
+  for (const i of planFiltered) planGroups[releaseBucket(i)].push(i);
+  // Coming Soon always sorts soonest-first; others honor the chosen sort.
+  planGroups.coming_soon.sort((a, b) => {
+    const ax = a.release_date ? new Date(a.release_date).getTime() : Infinity;
+    const bx = b.release_date ? new Date(b.release_date).getTime() : Infinity;
+    return ax - bx;
+  });
+  planGroups.available = sortItems(planGroups.available);
+  planGroups.announced = sortItems(planGroups.announced);
+
+  const isPlanView = activeStatus === 'plan_to_watch';
+
+  /** Single watchlist row. When `releaseInfo` is set, shows a Coming Soon / Announced badge. */
+  const renderRow = (item: WatchlistItem, releaseInfo = false) => {
+    const cfg = STATUS_CONFIG[item.status as WatchlistStatus];
+    let dateBadge: { text: string; cls: string } | null = null;
+    if (releaseInfo) {
+      const bucket = releaseBucket(item);
+      if (bucket === 'coming_soon') {
+        dateBadge = {
+          text: releasesLabel(item.release_date) ?? 'Coming Soon',
+          cls: 'bg-amber-600/20 text-amber-300 border-amber-700',
+        };
+      } else if (bucket === 'announced') {
+        dateBadge = { text: 'Announced', cls: 'bg-gray-600/30 text-gray-300 border-gray-600' };
+      }
+    }
+    return (
+      <Link
+        key={item.id}
+        to={`/details/${item.media_type}/${item.tmdb_id}`}
+        className="flex gap-4 bg-gray-800 rounded-lg p-3 hover:bg-gray-700 transition-colors group"
+      >
+        {/* Poster */}
+        <div className="flex-shrink-0 w-14 h-20 rounded overflow-hidden bg-gray-700">
+          <img
+            src={tmdbService.getImageUrl(item.poster_path ?? null, 'w342')}
+            alt={item.title ?? ''}
+            className="w-full h-full object-cover group-hover:opacity-90 transition-opacity"
+          />
+        </div>
+
+        {/* Info */}
+        <div className="flex-1 min-w-0 flex flex-col justify-center">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="font-semibold text-white truncate group-hover:text-primary-400 transition-colors">
+                {item.title ?? 'Unknown title'}
+              </p>
+              <p className="text-sm text-gray-400">
+                {item.media_year ?? '—'} · {item.media_type === 'movie' ? 'Movie' : 'TV Show'}
+              </p>
+              {item.notes && item.notes.trim() && (
+                <p className="text-xs text-gray-400 italic mt-0.5 line-clamp-1">
+                  {item.notes}
+                </p>
+              )}
+            </div>
+            <div className="flex flex-col items-end gap-1 flex-shrink-0">
+              <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${cfg?.color ?? ''}`}>
+                {cfg?.label ?? item.status}
+              </span>
+              {dateBadge && (
+                <span className={`px-2.5 py-1 rounded-full text-xs font-medium border whitespace-nowrap ${dateBadge.cls}`}>
+                  {dateBadge.text}
+                </span>
+              )}
+            </div>
+          </div>
+          <p className="text-xs text-gray-500 mt-1">
+            Added {new Date(item.created_at).toLocaleDateString()}
+            {item.completed_at && ` · Completed ${new Date(item.completed_at).toLocaleDateString()}`}
+          </p>
+        </div>
+      </Link>
+    );
+  };
 
   return (
     <Layout>
@@ -127,6 +229,7 @@ export default function WatchlistPage() {
             <option value="added">Recently Added</option>
             <option value="title">Title A–Z</option>
             <option value="year">Release Year</option>
+            <option value="release">Release Date</option>
           </select>
         </div>
 
@@ -134,6 +237,28 @@ export default function WatchlistPage() {
           <div className="flex items-center justify-center h-64">
             <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-500" />
           </div>
+        ) : isPlanView ? (
+          planFiltered.length === 0 ? (
+            <div className="bg-gray-800 rounded-lg p-12 text-center">
+              <p className="text-white font-medium mb-1">Nothing planned yet</p>
+              <p className="text-gray-400 text-sm">Add titles you want to watch — they'll be grouped by release date here.</p>
+            </div>
+          ) : (
+            <div className="space-y-8">
+              {BUCKET_ORDER.filter(b => planGroups[b].length > 0).map(bucket => (
+                <CollapsibleSection
+                  key={bucket}
+                  id={BUCKET_META[bucket].id}
+                  title={BUCKET_META[bucket].title}
+                  itemCount={planGroups[bucket].length}
+                >
+                  <div className="grid grid-cols-1 gap-3">
+                    {planGroups[bucket].map(item => renderRow(item, true))}
+                  </div>
+                </CollapsibleSection>
+              ))}
+            </div>
+          )
         ) : visible.length === 0 ? (
           <div className="bg-gray-800 rounded-lg p-12 text-center">
             <svg className="mx-auto h-14 w-14 text-gray-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -160,51 +285,7 @@ export default function WatchlistPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-3">
-            {visible.map(item => {
-              const cfg = STATUS_CONFIG[item.status as WatchlistStatus];
-              return (
-                <Link
-                  key={item.id}
-                  to={`/details/${item.media_type}/${item.tmdb_id}`}
-                  className="flex gap-4 bg-gray-800 rounded-lg p-3 hover:bg-gray-700 transition-colors group"
-                >
-                  {/* Poster */}
-                  <div className="flex-shrink-0 w-14 h-20 rounded overflow-hidden bg-gray-700">
-                    <img
-                      src={tmdbService.getImageUrl(item.poster_path ?? null, 'w342')}
-                      alt={item.title ?? ''}
-                      className="w-full h-full object-cover group-hover:opacity-90 transition-opacity"
-                    />
-                  </div>
-
-                  {/* Info */}
-                  <div className="flex-1 min-w-0 flex flex-col justify-center">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="font-semibold text-white truncate group-hover:text-primary-400 transition-colors">
-                          {item.title ?? 'Unknown title'}
-                        </p>
-                        <p className="text-sm text-gray-400">
-                          {item.media_year ?? '—'} · {item.media_type === 'movie' ? 'Movie' : 'TV Show'}
-                        </p>
-                        {item.notes && item.notes.trim() && (
-                          <p className="text-xs text-gray-400 italic mt-0.5 line-clamp-1">
-                            {item.notes}
-                          </p>
-                        )}
-                      </div>
-                      <span className={`flex-shrink-0 px-2.5 py-1 rounded-full text-xs font-medium border ${cfg?.color ?? ''}`}>
-                        {cfg?.label ?? item.status}
-                      </span>
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Added {new Date(item.created_at).toLocaleDateString()}
-                      {item.completed_at && ` · Completed ${new Date(item.completed_at).toLocaleDateString()}`}
-                    </p>
-                  </div>
-                </Link>
-              );
-            })}
+            {visible.map(item => renderRow(item))}
           </div>
         )}
       </div>
