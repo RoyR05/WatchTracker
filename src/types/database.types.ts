@@ -325,6 +325,8 @@ export interface Database {
           english_only_filter: boolean
           hiatus_hide_weeks: number
           hiatus_show_days: number
+          dashboard_section_order: string[] | null
+          dashboard_section_hidden: string[] | null
           created_at: string
           updated_at: string
         }
@@ -334,6 +336,8 @@ export interface Database {
           english_only_filter?: boolean
           hiatus_hide_weeks?: number
           hiatus_show_days?: number
+          dashboard_section_order?: string[] | null
+          dashboard_section_hidden?: string[] | null
           created_at?: string
           updated_at?: string
         }
@@ -343,6 +347,8 @@ export interface Database {
           english_only_filter?: boolean
           hiatus_hide_weeks?: number
           hiatus_show_days?: number
+          dashboard_section_order?: string[] | null
+          dashboard_section_hidden?: string[] | null
           created_at?: string
           updated_at?: string
         }

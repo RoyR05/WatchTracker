@@ -128,6 +128,43 @@ export const userSettingsService = {
     return this.updateSettings({ hiatus_hide_weeks: hideWeeks, hiatus_show_days: showDays });
   },
 
+  // ── Dashboard layout ──────────────────────────────────────────────────────
+
+  async getDashboardSectionOrder(): Promise<string[]> {
+    const DEFAULT = ['currently-watching', 'plan-to-watch', 'coming-soon', 'trending', 'anticipated', 'popular'];
+    const settings = await this.getSettings();
+    const saved = (settings as any)?.dashboard_section_order;
+    if (!Array.isArray(saved)) return DEFAULT;
+    // Merge: keep saved order, append any new IDs not yet in saved list
+    const merged = saved.filter((id: string) => DEFAULT.includes(id));
+    for (const id of DEFAULT) {
+      if (!merged.includes(id)) merged.push(id);
+    }
+    return merged;
+  },
+
+  async getDashboardHiddenSections(): Promise<Set<string>> {
+    const settings = await this.getSettings();
+    const saved = (settings as any)?.dashboard_section_hidden;
+    return new Set(Array.isArray(saved) ? saved : []);
+  },
+
+  async saveDashboardLayout(order: string[], hidden: Set<string>): Promise<{ success: boolean; error?: string }> {
+    cachedSettings = null; // invalidate so next read is fresh
+    return this.updateSettings({
+      dashboard_section_order: order,
+      dashboard_section_hidden: [...hidden],
+    } as any);
+  },
+
+  async resetDashboardLayout(): Promise<{ success: boolean; error?: string }> {
+    cachedSettings = null;
+    return this.updateSettings({
+      dashboard_section_order: null,
+      dashboard_section_hidden: null,
+    } as any);
+  },
+
   async getPreferredGenres(): Promise<number[]> {
     const settings = await this.getSettings();
     const raw = (settings as any)?.preferred_genres;
