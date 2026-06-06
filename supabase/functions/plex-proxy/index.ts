@@ -361,6 +361,16 @@ async function searchPlexDiscover(
   }
 }
 
+/** Resolve if the value is non-null; reject otherwise.
+ *  Lets Promise.any treat null results as "no match found" (i.e. keep racing).
+ */
+function ifFound<T>(p: Promise<T | null>): Promise<T> {
+  return p.then((v) => {
+    if (v === null) throw null;
+    return v;
+  });
+}
+
 Deno.serve(async (req: Request) => {
   const corsHeaders = getCorsHeaders(req);
   const jsonResponse = makeJsonResponse(corsHeaders);
@@ -458,46 +468,59 @@ Deno.serve(async (req: Request) => {
         return jsonResponse({ available: false, serversSearched: 0, error: err.message }, 200);
       }
 
-      // Run hub search, section search, and Plex Discover cloud search ALL in parallel.
-      // Previously: hub (8s timeout) → THEN section search → THEN nothing.
-      // Now: all three start simultaneously; fastest positive result wins.
-      //   • Hub search: 4s timeout (was 8s — it consistently times out anyway, so fail fast)
-      //   • Section search: typically 0.1–0.5s (direct library lookup, already fast)
-      //   • Discover search: 1–3s (Plex cloud API for streaming-only content)
-      const [hubBest, sectionBest, discoverMatch] = await Promise.all([
-        // 1. Hub search across all servers (shorter timeout to fail fast)
-        Promise.allSettled(
-          servers.map(async (server) => {
-            const path = `/hubs/search?query=${encodeURIComponent(title)}&includeCollections=0&includeExternalMedia=0`;
-            const data = await plexFetch(server.uri, path, server.accessToken, 4000) as
-              { MediaContainer?: { Hub?: Array<{ Metadata?: Array<Record<string, unknown>> }> } } | null;
-            if (!data) return null;
-            const allItems: Array<Record<string, unknown>> = [];
-            for (const hub of data?.MediaContainer?.Hub ?? []) {
-              if (hub.Metadata) allItems.push(...hub.Metadata);
-            }
-            return findBestMatch(allItems, title, year, mediaType, server);
-          })
-        ).then((results) => {
-          let best: ReturnType<typeof findBestMatch> = null;
-          for (const r of results) {
-            if (r.status === "fulfilled" && r.value) {
-              if (!best || r.value.score > best.score) best = r.value;
-            }
-          }
-          return best;
-        }),
-        // 2. Section search — runs concurrently, fast if sections are configured
-        runSectionSearch(title, year, mediaType, servers, config),
-        // 3. Plex Discover — cloud streaming catalog (covers FAST/partner streaming content)
-        searchPlexDiscover(title, year, mediaType, plexToken),
-      ]);
+      // Search strategy: hub + section + discover all start simultaneously.
+      // "First positive wins" — Promise.any resolves as soon as any local search finds a match,
+      // so a local library movie found via section (~0.3s) returns immediately without waiting
+      // for the hub to time out (4s).  Discover runs in parallel throughout; we only await it
+      // if both local searches miss.
+      //
+      //   • Hub:     4s timeout (consistently times out — kept for completeness, fail fast)
+      //   • Section: ~0.1–0.5s (direct library lookup — the fast path for local content)
+      //   • Discover: ~1–3s (Plex cloud API for streaming-only content)
+      //
+      // Timings:
+      //   Local library movie  →  ~0.3–0.5s  (section wins, return immediately)
+      //   Plex streaming only  →  ~4s         (hub times out, discover already done)
+      //   Not on Plex          →  ~4s         (all miss, must exhaust local searches)
 
-      // Best local result (hub or section)
+      // Discover starts immediately and runs for the lifetime of the request.
+      // We await it only if local searches both miss.
+      const discoverPromise = searchPlexDiscover(title, year, mediaType, plexToken);
+
+      // Hub search — 4s timeout, aggregates results across all servers
+      const hubPromise = Promise.allSettled(
+        servers.map(async (server) => {
+          const path = `/hubs/search?query=${encodeURIComponent(title)}&includeCollections=0&includeExternalMedia=0`;
+          const data = await plexFetch(server.uri, path, server.accessToken, 4000) as
+            { MediaContainer?: { Hub?: Array<{ Metadata?: Array<Record<string, unknown>> }> } } | null;
+          if (!data) return null;
+          const allItems: Array<Record<string, unknown>> = [];
+          for (const hub of data?.MediaContainer?.Hub ?? []) {
+            if (hub.Metadata) allItems.push(...hub.Metadata);
+          }
+          return findBestMatch(allItems, title, year, mediaType, server);
+        })
+      ).then((results) => {
+        let best: ReturnType<typeof findBestMatch> = null;
+        for (const r of results) {
+          if (r.status === "fulfilled" && r.value) {
+            if (!best || r.value.score > best.score) best = r.value;
+          }
+        }
+        return best;
+      });
+
+      // Section search — fast direct library lookup
+      const sectionPromise = runSectionSearch(title, year, mediaType, servers, config);
+
+      // Race hub and section: resolve with the first non-null result.
+      // ifFound() converts null → rejected promise so Promise.any skips misses.
+      // AggregateError (all missed) is caught and mapped to null.
       type LocalBest = { title: string; year: number | null; quality: string | null; server: string; score: number; ratingKey: string; serverUri: string; serverMachineId: string };
-      const localBest = ([hubBest, sectionBest] as Array<LocalBest | null>)
-        .filter((x): x is LocalBest => x !== null)
-        .reduce<LocalBest | null>((a, b) => (!a || b.score > a.score) ? b : a, null);
+      const localBest = await Promise.any([
+        ifFound(hubPromise),
+        ifFound(sectionPromise),
+      ]).catch((): LocalBest | null => null);
 
       if (localBest) {
         return jsonResponse({
@@ -515,7 +538,8 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      // Local not found — check Plex's cloud streaming catalog result
+      // Local miss — check Plex cloud streaming catalog (was already running in parallel)
+      const discoverMatch = await discoverPromise;
       if (discoverMatch) {
         return jsonResponse({
           available: true,
